@@ -11,6 +11,8 @@ report is refused here rather than silently printed in an unapproved font.
 """
 
 import io
+from collections import Counter
+from itertools import groupby
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
@@ -33,7 +35,14 @@ from desk.market_calendar import fmt_ist
 from desk.render.charts import Chart
 from desk.render.palette import GREY, INK, NAVY, RULES, WARNING
 from desk.report.model import Report
-from desk.report.text import compact_paths, gap_lines
+from desk.report.text import (
+    GAP_TOPICS,
+    compact_paths,
+    flat,
+    gap_lines,
+    plain_reason,
+    provenance_key,
+)
 
 PDF_VERSION = "pdf-a4-v1"
 FONT, FONT_BOLD = "Helvetica", "Helvetica-Bold"
@@ -146,57 +155,108 @@ def _numbered_canvas(report: Report):
     return NumberedCanvas
 
 
-def _lens_table(r) -> LongTable | None:
-    rows = [
-        [
-            Paragraph(h, STYLES["head"])
-            for h in ("Topic / instrument", "Value / unit", "Status / as of (IST)", "Source / note")
-        ]
-    ]
-    for f in r.facts:
-        rows.append(
-            [
-                Paragraph(_t(f"{f.label} — {f.instrument}"), STYLES["cell"]),
-                Paragraph(_t(f"{f.value} {f.unit}"), STYLES["cell"]),
-                Paragraph(_t(f"{f.data_class} | {fmt_ist(f.as_of)}"), STYLES["cell"]),
-                Paragraph(
-                    _t(f"{f.source.name} {f.source.url}" + (f" ({f.note})" if f.note else "")),
-                    STYLES["cell"],
-                ),
-            ]
-        )
-    for g in r.gaps:
-        rows.append(
-            [
-                Paragraph(_t(g.topic), STYLES["cell"]),
-                Paragraph("N/A (not zero)", STYLES["cell"]),
-                Paragraph(_t(str(g.data_class)), STYLES["cell"]),
-                Paragraph(
-                    _t(g.reason + (f" Effect: {g.effect}" if g.effect else "")), STYLES["cell"]
-                ),
-            ]
-        )
-    if len(rows) == 1:
-        return None
+COLS = (0.27, 0.17, 0.2, 0.36)
+HEADERS = ("Topic / instrument", "Value / unit", "Status / as of (IST)", "Source / note")
+BASE_STYLE = [
+    ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor(RULES)),
+    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ("TOPPADDING", (0, 0), (-1, -1), 3),
+    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+]
+
+
+def _cells(*texts: str, style: str = "cell") -> list:
+    return [Paragraph(_t(t), STYLES[style]) for t in texts]
+
+
+def _table(rows: list, extra: list, repeat: int = 0) -> LongTable:
     width = A4[0] - 2 * MARGIN
-    table = LongTable(
-        rows,
-        colWidths=[width * 0.27, width * 0.17, width * 0.2, width * 0.36],
-        repeatRows=1,
-        splitByRow=True,
-    )
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(RULES)),
-                ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor(RULES)),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ]
+    t = LongTable(rows, colWidths=[width * c for c in COLS], repeatRows=repeat, splitByRow=True)
+    t.setStyle(TableStyle(BASE_STYLE + extra))
+    return t
+
+
+def _lens_tables(r) -> list:
+    """Same rule as chat: consecutive facts sharing source, time and note get ONE
+    provenance row. Each such group is its own table whose provenance row repeats at
+    the top of a new page, so no value is ever shown without its source and time."""
+    if not r.facts and not r.gaps:
+        return []
+    out = [
+        _table(
+            [_cells(*HEADERS, style="head")],
+            [("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(RULES))],
         )
-    )
-    return table
+    ]
+    singles: list = []
+
+    def flush_singles() -> None:
+        if singles:
+            out.append(_table(list(singles), []))
+            singles.clear()
+
+    for _, run in groupby(r.facts, key=provenance_key):
+        group = list(run)
+        if len(group) == 1:
+            f = group[0]
+            singles.append(
+                _cells(
+                    f"{f.label} — {f.instrument}",
+                    f"{f.value} {f.unit}",
+                    f"{f.data_class} | {fmt_ist(f.as_of)}",
+                    f"{f.source.name} {f.source.url}" + (f" ({f.note})" if f.note else ""),
+                )
+            )
+            continue
+        flush_singles()
+        first = group[0]
+        main = Counter(f.data_class for f in group).most_common(1)[0][0]
+        instruments = {f.instrument for f in group}
+        common = next(iter(instruments)) if len(instruments) == 1 else None
+        head = (
+            f"{len(group)} items: {main} unless marked | as of {fmt_ist(first.as_of)} | "
+            f"{first.source.name} {first.source.url}"
+            + (f" | {common}" if common else "")
+            + (f" | {first.note}" if first.note else "")
+        )
+        rows = [[Paragraph(_t(head), STYLES["head"]), "", "", ""]]
+        for f in group:
+            topic = (
+                f.label
+                if common or f.instrument.lower() in f.label.lower()
+                else (f"{f.label} — {f.instrument}")
+            )
+            rows.append(
+                _cells(
+                    topic,
+                    f"{f.value}" + ("" if f.unit == "text" else f" {f.unit}"),
+                    "" if f.data_class == main else str(f.data_class),
+                    "",
+                )
+            )
+        out.append(
+            _table(
+                rows,
+                [
+                    ("SPAN", (0, 0), (-1, 0)),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(RULES)),
+                ],
+                repeat=1,
+            )
+        )
+    flush_singles()
+    gap_rows = [
+        _cells(
+            GAP_TOPICS.get(g.topic, g.topic),
+            "N/A (not zero)",
+            str(g.data_class),
+            plain_reason(g.topic, g.reason) + (f". Effect: {flat(g.effect)}" if g.effect else ""),
+        )
+        for g in r.gaps
+    ]
+    if gap_rows:
+        out.append(_table(gap_rows, []))
+    return out
 
 
 def render_pdf(report: Report, charts: list[Chart]) -> bytes:
@@ -237,12 +297,16 @@ def render_pdf(report: Report, charts: list[Chart]) -> bytes:
     )
     by_lens = {c.manifest["chart"]: c for c in charts}
     for r in report.lenses:
-        block = [Paragraph(_t(f"{r.lens} {r.title} — {r.status}"), s["h2"])]
-        table = _lens_table(r)
-        story.append(KeepTogether(block + ([table] if table and len(r.facts) < 6 else [])))
-        if table and len(r.facts) >= 6:
-            story.append(table)
-        story += [Paragraph(_t(f"Note: {n}"), s["foot"]) for n in r.notes]
+        tables = _lens_tables(r)
+        heading = Paragraph(_t(f"{r.lens} {r.title} — {r.status}"), s["h2"])
+        # keep the heading with the column header and the first table (or group)
+        story.append(KeepTogether([heading, *tables[:2]]))
+        story += tables[2:]
+        notes = list(r.notes)
+        if r.lens.value == "R14":  # paths are shown once, compactly, at the top
+            notes = [n for n in notes if not n.startswith(("BASE:", "UP:", "DOWN:"))]
+            notes.append("Session paths: see the top of this report.")
+        story += [Paragraph(_t(f"Note: {n}"), s["foot"]) for n in notes]
         if r.uncertainty:
             story.append(Paragraph(_t(f"Uncertainty: {r.uncertainty}"), s["foot"]))
         if r.lens.value == "R04" and "sector_returns" in by_lens:

@@ -50,13 +50,13 @@ def _fact_line(f: Fact) -> str:
     return line + (f" ({f.note})" if f.note else "")
 
 
-def _provenance(f: Fact) -> tuple:
+def provenance_key(f: Fact) -> tuple:
     return (f.source.name, f.source.url, f.as_of, f.note)
 
 
 def fact_lines(facts: tuple[Fact, ...]) -> list[str]:
     out: list[str] = []
-    for _, run in groupby(facts, key=_provenance):
+    for _, run in groupby(facts, key=provenance_key):
         group = list(run)
         if len(group) == 1:
             out.append(_fact_line(group[0]))

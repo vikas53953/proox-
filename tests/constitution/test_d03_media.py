@@ -160,7 +160,7 @@ def test_pdf_text_is_searchable_and_complete(pdf_pages, mock_report):
 def test_pdf_shows_missing_values_as_not_zero(build_report):
     report = build_report("no_orderflow_rights")
     text = "\n".join(pdf_pages_text(render_pdf(report, report_charts(report))))
-    assert "N/A (not zero)" in text and "no licensed trade-event feed" in text
+    assert "N/A (not zero)" in text and "no licensed trade-event feed" in text.lower()
 
 
 def test_real_report_pdf_refused_while_font_is_blocked(mock_report):
@@ -179,3 +179,35 @@ def test_pdf_and_summary_agree_on_paths_and_gaps(pdf_pages, mock_report):
     for line in compact_paths(mock_report) + gap_lines(mock_report):
         assert line in summary.body
         assert line.removeprefix("- ")[:60] in text
+
+
+def test_pdf_prints_shared_provenance_once(mock_report, chart):
+    from tests.media_helpers import pdf_text
+
+    text = pdf_text(render_pdf(mock_report, [chart]))
+    assert text.count("16 items: PRIOR SESSION unless marked") == 1
+    # group row + the chart's own source line + its text version; was 17+ before
+    assert text.count("https://example.invalid/mock/sectors") <= 3
+
+
+def test_pdf_group_split_across_pages_repeats_its_provenance(mock_report):
+    """A long shared-source group must carry its provenance row onto every page."""
+    from decimal import Decimal
+
+    from desk.core.lens import LensId, LensResult
+
+    r04 = next(r for r in mock_report.lenses if r.lens is LensId.R04)
+    base = r04.facts[0]
+    many = tuple(
+        base.model_copy(update={"label": f"Row {i:03d} return", "value": Decimal(i)})
+        for i in range(1, 81)
+    )
+    lenses = tuple(
+        LensResult(lens=r.lens, facts=many, gaps=r.gaps) if r.lens is LensId.R04 else r
+        for r in mock_report.lenses
+    )
+    pages = pdf_pages_text(render_pdf(mock_report.model_copy(update={"lenses": lenses}), []))
+    with_rows = [p for p in pages if "Row 0" in p]
+    assert len(with_rows) >= 2  # the group really spans pages
+    for page in with_rows:
+        assert "80 items: PRIOR SESSION unless marked" in page
