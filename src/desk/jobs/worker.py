@@ -45,7 +45,14 @@ def _opted_in(session: Session) -> list[Tenant]:
     return list(session.execute(select(Tenant).where(Tenant.opt_in_state == "yes")).scalars())
 
 
+NOTIFY_ON_FAILURE = frozenset({"MORNING_REPORT"})  # the optional addendum fails quietly
+
+
 def _notify_failure(session: Session, kind: str, day: date, category: str, now: datetime) -> None:
+    """Customers hear once, about the morning report. An addendum failure is recorded on
+    the job for the operator; a second "no report" message would only confuse."""
+    if kind not in NOTIFY_ON_FAILURE:
+        return
     for tenant in _opted_in(session):
         enqueue_failure_notice(session, tenant, day, kind, category, now)
 

@@ -253,3 +253,21 @@ def test_old_worker_cannot_finish_while_new_worker_holds_the_lease(db, mock_cale
         complete(s, new, {"from": "new"}, ist(7, 42))
         s.commit()
     assert jobs(db)[0].result == {"from": "new"}
+
+
+def test_failed_addendum_does_not_send_a_second_no_report_notice(db, mock_calendar):
+    add_tenant(db, ALICE, "yes", ist(7, 0))
+    plan(db, mock_calendar, auction=True)
+    clock = Clock(ist(7, 31))
+    for _ in range(3):  # morning fails for good -> one notice
+        run_one(db, deps(clock, mock_calendar, feed_for=_feed_down), "w1")
+        clock.now += timedelta(minutes=2)
+    clock.now = ist(9, 9)
+    for _ in range(3):  # addendum fails too -> recorded, no extra notice
+        run_one(db, deps(clock, mock_calendar, feed_for=_feed_down), "w1")
+        clock.now += timedelta(seconds=70)  # retries are 1 minute apart
+    assert {j.kind: j.state for j in jobs(db)} == {
+        "AUCTION_ADDENDUM": "FAILED",
+        "MORNING_REPORT": "FAILED",
+    }
+    assert len(outbox(db, "failure_notice")) == 1

@@ -16,6 +16,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `.env.example` | Setting names with empty placeholders — never real secrets |
 | `alembic.ini`, `alembic/` | Database schema changes. `0001` = M2 tables; `0002` = jobs, delivery states, receipts; `0003` = media, feedback, corrections |
 | `config/whatsapp_templates.json` | Template drafts from the design doc — status DRAFT, not submitted (G02) |
+| `uat/` | D07 run: `mock_days.py` plays 3 mock days end to end; `render_html.py` makes the chat page you review |
 | `samples/` | Mock reports as text, plus `samples/media/`: the PDF, the chart PNG and its manifest — open them directly |
 
 ## `src/desk/` — the program
