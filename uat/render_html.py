@@ -3,6 +3,7 @@
 python uat/render_html.py OUT_DIR      # reads OUT_DIR/transcript.json, writes index.html
 """
 
+import base64
 import html
 import json
 import sys
@@ -92,12 +93,23 @@ details[open] summary { margin-bottom: 4px; }
 .doc a { color: var(--accent); font-weight: 600; overflow-wrap: anywhere; }
 .side { border-left: 3px solid var(--line); padding-left: 12px; display: grid; gap: 8px; }
 ul.jobs { margin: 0; padding-left: 1.1em; font: 0.8rem/1.6 var(--font-mono); color: var(--muted); }
+@page { size: A4; margin: 14mm 12mm; }
+@media print { body { background: #fff; } .msg, .note, .panel { break-inside: avoid; }
+  .wrap { max-width: none; } }
 a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 """
 
 
 def ist(ts: str) -> str:
     return datetime.fromisoformat(ts).astimezone(IST).strftime("%H:%M IST")
+
+
+EMBED: dict[str, str] = {}  # media path -> data: URI (standalone export only)
+EXPAND = False  # standalone export shows every message in full (prints cleanly)
+
+
+def src(path: str) -> str:
+    return EMBED.get(path, path)
 
 
 def bubble(ev: dict) -> str:
@@ -119,16 +131,17 @@ def bubble(ev: dict) -> str:
     text = ev.get("text") or ""
     if media and media["kind"] == "image":
         parts.append(
-            f'<div class="media"><img src="{e(media["file"])}" '
+            f'<div class="media"><img src="{e(src(media["file"]))}" '
             f'alt="{e(text.splitlines()[-1] if text else "chart")}" loading="lazy"></div>'
         )
     elif media:
         name = media["file"].split("/")[-1]
         parts.append(
             f'<div class="doc"><span class="badge">PDF</span>'
-            f'<a href="{e(media["file"])}" target="_blank" rel="noopener">{e(name)}</a></div>'
+            f'<a href="{e(src(media["file"]))}" download="{e(name)}" target="_blank" '
+            f'rel="noopener">{e(name)}</a></div>'
         )
-    if len(text) > LONG:
+    if len(text) > LONG and not EXPAND:
         first = "\n".join(text.splitlines()[:3])
         parts.append(
             f'<div class="body">{e(first)}</div><details><summary>Show full message '
@@ -141,7 +154,7 @@ def bubble(ev: dict) -> str:
     return f'<div class="msg{" me" if me else ""}">{"".join(parts)}</div>'
 
 
-def render(out: Path) -> None:
+def render(out: Path, standalone: bool = False) -> None:
     data = json.loads((out / "transcript.json").read_text())
     by_day: dict[str, list] = {}
     for ev in data["events"]:
@@ -200,8 +213,30 @@ def render(out: Path) -> None:
   </section>
 </main>
 """
-    (out / "index.html").write_text(page)
+    if not standalone:
+        (out / "index.html").write_text(page)
+        return
+    doc = (
+        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        + page.replace("<main", "</head>\n<body>\n<main", 1)
+        + "</body>\n</html>\n"
+    )
+    (out / "D07-mock-uat.html").write_text(doc)
+
+
+def standalone(out: Path) -> None:
+    global EXPAND
+    mime = {".png": "image/png", ".pdf": "application/pdf"}
+    for f in sorted((out / "media").iterdir()):
+        data = base64.b64encode(f.read_bytes()).decode()
+        EMBED[f"media/{f.name}"] = f"data:{mime[f.suffix]};base64,{data}"
+    EXPAND = True
+    render(out, standalone=True)
 
 
 if __name__ == "__main__":
-    render(Path(sys.argv[1]))
+    if "--standalone" in sys.argv:
+        standalone(Path(sys.argv[1]))
+    else:
+        render(Path(sys.argv[1]))
