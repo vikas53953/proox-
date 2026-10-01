@@ -57,6 +57,10 @@
   "meta": {
     "underlying": "NIFTY 50 (MOCK)",
     "expiry": "2026-10-06",
-    "spot": "25120"
+    "spot": "25120",
+    "risk_free_rate_pct": "6.50",
+    "rate_source": "MOCK 91-day T-bill yield",
+    "dividend_yield_pct": "1.20",
+    "dividend_source": "MOCK Nifty 50 trailing dividend yield"
   }
 }

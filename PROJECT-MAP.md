@@ -33,6 +33,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `quant/levels.py` | Prior-day high / low / close |
 | `quant/profile.py` | Volume profile: POC and 70% value area |
 | `quant/options.py` | Put/call ratio, max pain, ATM strike, basis, OI change |
+| `quant/greeks.py` | Black-Scholes option Greeks (delta, gamma, vega, theta) with every assumption labelled |
 | `quant/orderflow.py` | Tick-rule order-flow estimate (always labelled PROXY) |
 | `lenses/context.py` | What every lens receives, and the "is this data fresh?" rules |
 | `lenses/r01_news.py` … `r15_quality.py` | One file per lens R01–R15 |
@@ -48,6 +49,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 
 | Path | What it does |
 |---|---|
+| `calendar/NSE-CM-holidays-2026-v1.json` | Official NSE 2026 holidays (from your list) — used by `python -m desk report` |
 | `calendar/MOCK-test-calendar-2026.json` | Fake holiday list for tests only |
 | `calendar/README.md` | Says the official NSE calendar file is still pending, and why |
 | `market/2026-10-01/full_mock/` | Every dataset for one fake morning |

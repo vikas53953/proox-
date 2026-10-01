@@ -5,7 +5,7 @@ values must match exactly; any change means a method change and a version bump.
 """
 
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
+from decimal import Context, Decimal, localcontext
 
 import pytest
 from hypothesis import given, settings
@@ -306,3 +306,127 @@ def test_weekend_date_in_holiday_list_is_rejected(tmp_path):
     )
     with pytest.raises(ValueError, match="weekend"):
         TradingCalendar.load(bad)
+
+
+# ---- Black-Scholes Greeks (R13) ----------------------------------------------------------
+
+
+def _float_bs(s, k, t, r, q, v, call):
+    """Independent float reference (tests only) to cross-check the Decimal engine."""
+    import math
+
+    n = lambda x: 0.5 * (1 + math.erf(x / math.sqrt(2)))  # noqa: E731
+    pdf = lambda x: math.exp(-x * x / 2) / math.sqrt(2 * math.pi)  # noqa: E731
+    d1 = (math.log(s / k) + (r - q + v * v / 2) * t) / (v * math.sqrt(t))
+    d2 = d1 - v * math.sqrt(t)
+    if call:
+        price = s * math.exp(-q * t) * n(d1) - k * math.exp(-r * t) * n(d2)
+        delta = math.exp(-q * t) * n(d1)
+    else:
+        price = k * math.exp(-r * t) * n(-d2) - s * math.exp(-q * t) * n(-d1)
+        delta = -math.exp(-q * t) * n(-d1)
+    gamma = math.exp(-q * t) * pdf(d1) / (s * v * math.sqrt(t))
+    return price, delta, gamma
+
+
+def test_bs_textbook_golden():
+    """Hull's classic example: S=K=100, T=1, r=5%, q=0, vol=20%."""
+    from desk.quant.greeks import BSInputs, black_scholes
+
+    inp = BSInputs(D(100), D(100), D(1), D("0.05"), D(0), D("0.2"))
+    c, p = black_scholes(inp, call=True), black_scholes(inp, call=False)
+    tol = D("0.0001")
+    assert abs(c.price - D("10.4506")) < tol and abs(p.price - D("5.5735")) < tol
+    assert abs(c.delta - D("0.6368")) < tol and abs(p.delta - D("-0.3632")) < tol
+    assert abs(c.gamma - D("0.018762")) < D("0.000001")
+    assert abs(c.vega_per_vol_point - D("0.37524")) < tol
+    assert abs(c.theta_per_day * 365 - D("-6.4140")) < D("0.001")
+    assert abs(p.theta_per_day * 365 - D("-1.6579")) < D("0.001")
+
+
+def test_norm_cdf_matches_independent_reference():
+    import math
+
+    from desk.quant.greeks import norm_cdf
+
+    for i in range(-80, 81):
+        x = i / 10
+        ref = 0.5 * (1 + math.erf(x / math.sqrt(2)))
+        assert abs(float(norm_cdf(D(str(x)))) - ref) < 1e-14, x
+
+
+@settings(max_examples=60, deadline=None)
+@given(
+    st.integers(20000, 30000),
+    st.integers(-15, 15),
+    st.integers(1, 120),
+    st.integers(0, 900),
+    st.integers(0, 300),
+    st.integers(500, 6000),
+)
+def test_bs_parity_and_cross_check(spot, strike_steps, days, r_bp, q_bp, vol_bp):
+    """Put-call parity holds to 1e-30, and the Decimal engine agrees with a float reference."""
+    from desk.quant.greeks import BSInputs, black_scholes
+
+    s, k = D(spot), D(spot + strike_steps * 100)
+    t, r, q, v = D(days) / 365, D(r_bp) / 10000, D(q_bp) / 10000, D(vol_bp) / 10000
+    inp = BSInputs(s, k, t, r, q, v)
+    c, p = black_scholes(inp, call=True), black_scholes(inp, call=False)
+    with localcontext(Context(prec=50)):  # same precision as the engine
+        parity = c.price - p.price - (s * (-q * t).exp() - k * (-r * t).exp())
+        delta_parity = c.delta - p.delta - (-q * t).exp()
+    assert abs(parity) < D("1e-40") * s  # relative to price size
+    assert abs(delta_parity) < D("1e-40")
+    assert c.gamma == p.gamma
+    ref_price, ref_delta, _ = _float_bs(*map(float, (s, k, t, r, q, v)), True)
+    assert abs(float(c.price) - ref_price) < 1e-6 * max(1.0, ref_price)
+    assert abs(float(c.delta) - ref_delta) < 1e-9
+
+
+def test_r13_greeks_carry_their_assumptions(build_report):
+    report = build_report()
+    r13 = next(r for r in report.lenses if r.lens.value == "R13")
+    greeks = [f for f in r13.facts if "(model)" in f.label]
+    assert len(greeks) == 8  # delta, gamma, vega, theta x CE, PE
+    for f in greeks:
+        for must in (
+            "MODEL value",
+            "Black-Scholes",
+            "European",
+            "rate 6.50%",
+            "MOCK 91-day",
+            "dividend yield 1.20%",
+            "ACT/365",
+            "Not a market price",
+        ):
+            assert must in f.note, (f.label, must)
+    delta = {f.label: f.value for f in greeks if "delta" in f.label}
+    assert D(0) < delta["ATM CE delta (model)"] < D(1)
+    assert D(-1) < delta["ATM PE delta (model)"] < D(0)
+    assert r13.status.value == "COMPLETE"
+
+
+def test_r13_greeks_unavailable_without_rate_inputs(build_report, mock_calendar):
+    from desk.agents.model import MockModelAdapter
+    from desk.pipeline import run_report
+
+    base = feed("full_mock")
+
+    class NoRateFeed:
+        name, is_mock = "norate", True
+
+        def capabilities(self):
+            return base.capabilities()
+
+        def fetch(self, kind, day):
+            ds = base.fetch(kind, day)
+            if kind is DatasetKind.OPTION_CHAIN:
+                ds.meta.pop("risk_free_rate_pct")
+            return ds
+
+    report = run_report(
+        calendar=mock_calendar, feed=NoRateFeed(), model=MockModelAdapter(), trading_date=MOCK_DAY
+    )
+    r13 = next(r for r in report.lenses if r.lens.value == "R13")
+    assert not any("(model)" in f.label for f in r13.facts)
+    assert any(g.topic == "Greeks" and "rate" in g.reason for g in r13.gaps)

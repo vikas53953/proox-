@@ -12,7 +12,6 @@ DATA GAPS:
 - UNAVAILABLE: gift_nifty: not available under current feed rights (GIFT Nifty not licensed in current feed (G03)) (affects R02, R12)
 - UNAVAILABLE: trades: not available under current feed rights (no licensed trade-event feed (G03)) (affects R08)
 - UNAVAILABLE: no sourced margin-financing data in current feed (affects R10)
-- UNAVAILABLE: feed provides no Greeks; pricing-model assumptions not yet chosen (affects R13)
 
 R01 Overnight news — COMPLETE
 - [FACT] MOCKBANK_A Q2 business update: Deposits up vs last quarter (mock) text [OVERNIGHT] — MOCKBANK_A; MOCK Exchange filing, as of 30 Sep 2026 19:00 IST (credibility high)
@@ -145,16 +144,23 @@ R12 Auction market theory (AMT) — DEGRADED
 - Note: Acceptance above VAH / rejection back inside value is only observable after the open.
 - Uncertainty: Profile is of the futures proxy, not the cash index itself.
 
-R13 Options lens — DEGRADED
+R13 Options lens — COMPLETE
 - Put/call ratio (OI): 0.92 ratio [DERIVED] — NIFTY 50 (MOCK) options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (method options-v1; context only, not support/resistance)
 - Put/call ratio (volume): 0.89 ratio [DERIVED] — NIFTY 50 (MOCK) options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (method options-v1; context only, not support/resistance)
 - Max pain strike: 25100 points [DERIVED] — NIFTY 50 (MOCK) options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (method options-v1; context only, not support/resistance)
 - ATM strike (vs prior spot close): 25100 points [DERIVED] — NIFTY 50 (MOCK) options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (method options-v1; context only, not support/resistance)
 - ATM CE implied volatility: 11.2 % annualised [PRIOR SESSION] — NIFTY 50 (MOCK) options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST
 - ATM PE implied volatility: 11.9 % annualised [PRIOR SESSION] — NIFTY 50 (MOCK) options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST
+- ATM CE delta (model): 0.5490 ratio [DERIVED] — NIFTY 50 (MOCK) 25100 options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (MODEL value (bsm-european-v1): Black-Scholes-Merton, European exercise; spot = prior close 25120; vol = published ATM CE IV 11.2%; rate 6.50% continuous (MOCK 91-day T-bill yield); dividend yield 1.20% continuous (MOCK Nifty 50 trailing dividend yield); time ACT/365 from data as-of to expiry 15:30 IST = 0.0164 yr. Not a market price.)
+- ATM CE gamma (model): 0.001097 per point [DERIVED] — NIFTY 50 (MOCK) 25100 options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (MODEL value (bsm-european-v1): Black-Scholes-Merton, European exercise; spot = prior close 25120; vol = published ATM CE IV 11.2%; rate 6.50% continuous (MOCK 91-day T-bill yield); dividend yield 1.20% continuous (MOCK Nifty 50 trailing dividend yield); time ACT/365 from data as-of to expiry 15:30 IST = 0.0164 yr. Not a market price.)
+- ATM CE vega (model): 12.75 points per 1 vol pt [DERIVED] — NIFTY 50 (MOCK) 25100 options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (MODEL value (bsm-european-v1): Black-Scholes-Merton, European exercise; spot = prior close 25120; vol = published ATM CE IV 11.2%; rate 6.50% continuous (MOCK 91-day T-bill yield); dividend yield 1.20% continuous (MOCK Nifty 50 trailing dividend yield); time ACT/365 from data as-of to expiry 15:30 IST = 0.0164 yr. Not a market price.)
+- ATM CE theta (model): -13.87 points per day [DERIVED] — NIFTY 50 (MOCK) 25100 options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (MODEL value (bsm-european-v1): Black-Scholes-Merton, European exercise; spot = prior close 25120; vol = published ATM CE IV 11.2%; rate 6.50% continuous (MOCK 91-day T-bill yield); dividend yield 1.20% continuous (MOCK Nifty 50 trailing dividend yield); time ACT/365 from data as-of to expiry 15:30 IST = 0.0164 yr. Not a market price.)
+- ATM PE delta (model): -0.4534 ratio [DERIVED] — NIFTY 50 (MOCK) 25100 options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (MODEL value (bsm-european-v1): Black-Scholes-Merton, European exercise; spot = prior close 25120; vol = published ATM PE IV 11.9%; rate 6.50% continuous (MOCK 91-day T-bill yield); dividend yield 1.20% continuous (MOCK Nifty 50 trailing dividend yield); time ACT/365 from data as-of to expiry 15:30 IST = 0.0164 yr. Not a market price.)
+- ATM PE gamma (model): 0.001034 per point [DERIVED] — NIFTY 50 (MOCK) 25100 options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (MODEL value (bsm-european-v1): Black-Scholes-Merton, European exercise; spot = prior close 25120; vol = published ATM PE IV 11.9%; rate 6.50% continuous (MOCK 91-day T-bill yield); dividend yield 1.20% continuous (MOCK Nifty 50 trailing dividend yield); time ACT/365 from data as-of to expiry 15:30 IST = 0.0164 yr. Not a market price.)
+- ATM PE vega (model): 12.76 points per 1 vol pt [DERIVED] — NIFTY 50 (MOCK) 25100 options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (MODEL value (bsm-european-v1): Black-Scholes-Merton, European exercise; spot = prior close 25120; vol = published ATM PE IV 11.9%; rate 6.50% continuous (MOCK 91-day T-bill yield); dividend yield 1.20% continuous (MOCK Nifty 50 trailing dividend yield); time ACT/365 from data as-of to expiry 15:30 IST = 0.0164 yr. Not a market price.)
+- ATM PE theta (model): -10.97 points per day [DERIVED] — NIFTY 50 (MOCK) 25100 options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST (MODEL value (bsm-european-v1): Black-Scholes-Merton, European exercise; spot = prior close 25120; vol = published ATM PE IV 11.9%; rate 6.50% continuous (MOCK 91-day T-bill yield); dividend yield 1.20% continuous (MOCK Nifty 50 trailing dividend yield); time ACT/365 from data as-of to expiry 15:30 IST = 0.0164 yr. Not a market price.)
 - Highest call OI strike: 25200 points [PRIOR SESSION] — NIFTY 50 (MOCK) options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST
 - Highest put OI strike: 25000 points [PRIOR SESSION] — NIFTY 50 (MOCK) options, expiry 2026-10-06; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST
-- GAP Greeks: UNAVAILABLE — feed provides no Greeks; pricing-model assumptions not yet chosen
 - Note: Aggregate chain does not disclose dealer long/short inventory; no gamma-exposure estimate is made.
 
 R14 Conditional outlook — COMPLETE
@@ -194,8 +200,8 @@ R15 Data / quality summary — DEGRADED
 - Note: R10 Funding / flows: DEGRADED
 - Note: R11 Sentiment: COMPLETE
 - Note: R12 Auction market theory (AMT): DEGRADED
-- Note: R13 Options lens: DEGRADED
+- Note: R13 Options lens: COMPLETE
 - Note: R14 Conditional outlook: COMPLETE
 - Note: Mode: RESEARCH. No simulated account, no orders, no broker.
 
-Hash bc65a39d3614813c | feed fixture:2026-10-01/no_orderflow_rights | model mock-model-v1 | calendar MOCK-2026.1
+Hash 850a30cdd3bee13f | feed fixture:2026-10-01/no_orderflow_rights | model mock-model-v1 | calendar NSE-CM-2026-v1
