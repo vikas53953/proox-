@@ -9,6 +9,7 @@ from desk.core.facts import DataClass
 from desk.core.lens import LensId
 from desk.market_calendar import fmt_ist
 from desk.report.model import Report
+from desk.report.text import GAP_TOPICS, fact_lines, plain_reason
 
 CAVEAT = (
     "Indicative auction values can change until the pre-open closes; they are not "
@@ -33,12 +34,11 @@ def addendum_text(auction: Report, morning_ref: str | None) -> str:
         "",
         "Changed:",
     ]
-    lines += [
-        f"- {f.label}: {f.value} {f.unit} ({f.source.name}, {fmt_ist(f.as_of)})" for f in changed
-    ] or ["- nothing: no indicative auction values available"]
+    # same shared-provenance rule as the report: one source/time line per group
+    lines += fact_lines(tuple(changed)) or ["- nothing: no indicative auction values available"]
     lines += ["", "Still unknown:"]
-    lines += [f"- {g.topic}: {g.reason}" for g in unknown] or [
-        "- final auction price and today's continuous order flow (do not exist yet)"
-    ]
+    lines += [
+        f"- {GAP_TOPICS.get(g.topic, g.topic)}: {plain_reason(g.topic, g.reason)}" for g in unknown
+    ] or ["- final auction price and today's continuous order flow (do not exist yet)"]
     lines += ["", CAVEAT]
     return "\n".join(lines)

@@ -94,8 +94,21 @@ details[open] summary { margin-bottom: 4px; }
 .side { border-left: 3px solid var(--line); padding-left: 12px; display: grid; gap: 8px; }
 ul.jobs { margin: 0; padding-left: 1.1em; font: 0.8rem/1.6 var(--font-mono); color: var(--muted); }
 @page { size: A4; margin: 14mm 12mm; }
-@media print { body { background: #fff; } .msg, .note, .panel { break-inside: avoid; }
-  .wrap { max-width: none; } }
+/* Print: Chrome overlaps "avoid-break" children of flex/grid containers that cross a
+   page boundary, so print uses plain block flow (same look, no stacking). */
+@media print {
+  body { background: #fff; }
+  .wrap, .day, .log, .side, .panel, .dayhead, header { display: block; }
+  .wrap { max-width: none; }
+  .wrap > * + *, .log > * + *, .day > * + *, .side > * + * { margin-top: 10px; }
+  .msg { display: block; width: fit-content; max-width: 88%; break-inside: avoid; }
+  .msg > * + * { margin-top: 4px; }
+  .msg.me { margin-left: auto; }
+  .meta { display: block; text-align: right; }
+  .note { display: block; width: fit-content; margin-left: auto; margin-right: auto;
+    break-inside: avoid; }
+  .panel { break-inside: avoid; }
+}
 a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 """
 

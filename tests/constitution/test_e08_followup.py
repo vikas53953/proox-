@@ -79,12 +79,14 @@ def test_auction_addendum_is_labelled_linked_and_sent_before_open(db, mock_calen
         "INDICATIVE AUCTION",
         "as of 01 Oct 2026 09:12 IST",
         "Update to MOCK-2026-10-01-MORNING v1",
-        "MOCKBANK_A indicative equilibrium price: 1658.00 INR",
-        "MOCK feed: pre_open, 01 Oct 2026 09:08 IST",
+        "4 items: INDICATIVE AUCTION unless marked | as of 01 Oct 2026 09:08 IST | "
+        "MOCK feed: pre_open",
+        "- MOCKBANK_A indicative equilibrium price: 1658.00 INR",
         CAVEAT,
     ):
         assert must in add.body, must
     assert add.expires_at == ist(9, 15)
+    assert add.body.count("MOCK feed: pre_open") == 1  # provenance printed once
     graph = FakeGraph()
     send_batch(db, graph.client(), DRAFTS, ist(9, 11))
     assert rows(db, kind="addendum")[0].state == "ACCEPTED"
@@ -112,7 +114,7 @@ def test_addendum_without_auction_data_says_what_is_unknown(db, mock_calendar):
     run_one(db, deps(Clock(ist(9, 10)), mock_calendar), "w1")  # full_mock: no pre_open
     (add,) = rows(db, kind="addendum")
     assert "- nothing: no indicative auction values available" in add.body
-    assert "Still unknown:" in add.body and "pre_open" in add.body
+    assert "Still unknown:" in add.body and "Pre-open data" in add.body
 
 
 # ---- follow-up: TEXT version ----------------------------------------------------------------
