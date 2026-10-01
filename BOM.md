@@ -51,3 +51,11 @@ passes on Python 3.13.15 + PostgreSQL 17.11.
 | Mock PDFs only | ReportLab built-in Helvetica, visibly labelled `FONT: PLACEHOLDER` | owner-approved placeholder |
 | Mock charts (PNG) | Matplotlib's bundled DejaVu Sans, visibly labelled `FONT: PLACEHOLDER` | builder choice, same rule as the PDF placeholder — confirm |
 | Real reports | Noto Sans / Noto Sans Devanagari | **BLOCKED** (asset revision/license/hash + shaping renderer, G04). `render_pdf` refuses non-mock reports; they go out as text parts. |
+
+## Builder automation (not runtime, not product)
+
+| Item | Pin | Status |
+|---|---|---|
+| anthropics/claude-code-action | v1.0.238 @ `12dd8d74c712f5f3669365b2369b558c495b1104` (what `@v1` pointed to on 2026-10-01) | owner-approved automation; see AUTOMATION.md |
+| actions/checkout | v6.1.0 @ `d23441a48e516b6c34aea4fa41551a30e30af803` (what `@v6` pointed to on 2026-10-01) | used by the workflow above |
+| Model for the Action | `claude-opus-5-5` (explicit ID, no alias) | owner-approved automation |
