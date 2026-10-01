@@ -10,9 +10,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import partial
 
-from sqlalchemy import select, update
+from sqlalchemy import exists, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, aliased, sessionmaker
 
 from desk.db.models import Media, Outbox, Tenant
 from desk.outbox.policy import TEMPLATE_KIND, Action, decide
@@ -50,24 +50,46 @@ def sweep_stuck(session: Session, now: datetime) -> int:
     return res.rowcount
 
 
-def claim(session: Session, now: datetime, limit: int) -> list[uuid.UUID]:
-    rows = (
-        session.execute(
-            select(Outbox)
-            .where(
-                Outbox.state == "PENDING",
-                (Outbox.next_attempt_at.is_(None)) | (Outbox.next_attempt_at <= now),
-            )
-            .order_by(Outbox.created_at, Outbox.part_no)
-            .limit(limit)
-            .with_for_update(skip_locked=True)
-        )
-        .scalars()
-        .all()
+Endpoint = tuple[str, str]  # (channel, business endpoint: WhatsApp phone id / Telegram bot id)
+
+
+def claim(
+    session: Session, now: datetime, limit: int, endpoints: set[Endpoint] | None = None
+) -> list[uuid.UUID]:
+    """Claim PENDING rows for the given endpoints only (HIGH-2), in order, skipping every
+    recipient that still has an earlier message waiting out a retry/cooldown — so part 2
+    can never overtake part 1 (MED-4)."""
+    earlier = aliased(Outbox)
+    cooling = exists().where(  # same recipient on the same endpoint is waiting a retry out
+        earlier.state == "PENDING",
+        earlier.next_attempt_at > now,
+        earlier.channel == Outbox.channel,
+        earlier.business_phone_id == Outbox.business_phone_id,
+        earlier.recipient == Outbox.recipient,
     )
+    q = (
+        select(Outbox)
+        .where(
+            Outbox.state == "PENDING",
+            (Outbox.next_attempt_at.is_(None)) | (Outbox.next_attempt_at <= now),
+            ~cooling,
+        )
+        .order_by(Outbox.created_at, Outbox.part_no)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    if endpoints is not None:
+        q = q.where(tuple_(Outbox.channel, Outbox.business_phone_id).in_(list(endpoints)))
+    rows = session.execute(q).scalars().all()
     for row in rows:
         row.state, row.claimed_at, row.attempts = "SENDING", now, row.attempts + 1
     return [r.id for r in rows]
+
+
+def _release(row: Outbox, until: datetime, now: datetime) -> None:
+    """Give a claimed-but-unsent row back without spending a retry attempt."""
+    row.state, row.attempts, row.next_attempt_at = "PENDING", row.attempts - 1, until
+    row.claimed_at, row.last_status_at = None, now
 
 
 def _record(row: Outbox, outcome: Outcome, now: datetime) -> str:
@@ -127,11 +149,13 @@ def _queue_template(session: Session, row: Outbox, now: datetime) -> None:
     )
 
 
-def _transports(client_or_map) -> dict[str, Transport]:
-    """Accept {channel: Transport}, or a bare WhatsApp GraphClient (older callers)."""
-    if isinstance(client_or_map, dict):
-        return client_or_map
-    return {"whatsapp": WhatsAppTransport(client_or_map)}
+def _transports(given) -> dict[Endpoint, Transport]:
+    """{(channel, endpoint): Transport}. Accepts a list/dict of transports or a bare WhatsApp
+    GraphClient (older callers). Each transport sends ONLY its own endpoint's rows."""
+    if isinstance(given, GraphClient):
+        given = [WhatsAppTransport(given)]
+    items = given.values() if isinstance(given, dict) else given
+    return {(t.caps.name, t.endpoint): t for t in items}
 
 
 def send_batch(
@@ -141,24 +165,25 @@ def send_batch(
     now: datetime,
     limit: int = 50,
 ) -> SendStats:
-    by_channel = _transports(transports)
+    by_endpoint = _transports(transports)
     stats = SendStats()
     with factory() as s:
         for _ in range(sweep_stuck(s, now)):
             stats.add("UNKNOWN(swept)")
-        ids = claim(s, now, limit)
+        ids = claim(s, now, limit, set(by_endpoint))
         s.commit()
+    paused: dict[Endpoint, datetime] = {}  # endpoint -> cooldown end (this batch)
     for row_id in ids:
         with factory() as s:
             row = s.get(Outbox, row_id)
-            tenant = s.get(Tenant, row.tenant_id) if row.tenant_id else None
-            transport = by_channel.get(row.channel)
-            if transport is None:
-                row.state, row.last_status_at = "WAITING_WINDOW", now
-                row.wait_reason = f"no transport configured for channel {row.channel}"
+            key = (row.channel, row.business_phone_id)
+            transport = by_endpoint.get(key)
+            if transport is None or key in paused:  # wrong endpoint (defensive) or cooling
+                _release(row, paused.get(key, now), now)
                 s.commit()
-                stats.add(row.state)
+                stats.add("HELD")
                 continue
+            tenant = s.get(Tenant, row.tenant_id) if row.tenant_id else None
             decision = decide(s, row, tenant, now, templates)
             if decision.action is Action.CANCEL:
                 row.state, row.error, row.last_status_at = "CANCELLED", decision.reason, now
@@ -199,6 +224,8 @@ def send_batch(
                 stats.add(row.state)
                 continue
             stats.add(_record(row, outcome, now))
+            if row.state == "PENDING":  # a retry: pause this endpoint for the rest of the batch
+                paused[(row.channel, row.business_phone_id)] = row.next_attempt_at
             if outcome.result is SendResult.BLOCKED and row.tenant_id:
                 blocked = s.get(Tenant, row.tenant_id)
                 blocked.opt_in_state = "stopped"  # blocking the bot = opting out

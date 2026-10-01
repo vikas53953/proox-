@@ -129,9 +129,14 @@ def _serve(args: argparse.Namespace) -> None:
     import time
 
     from desk.agents.model import MockModelAdapter
+    from desk.config import TelegramSettings
     from desk.jobs.worker import Deps
-    from desk.runner import run_cycle
-    from desk.transport.telegram.client import make_telegram_transport
+    from desk.runner import describe, run_cycle, serve_loop
+    from desk.transport.telegram.client import (
+        TelegramFatalError,
+        TelegramPollError,
+        make_telegram_transport,
+    )
     from desk.transport.whatsapp.adapter import WhatsAppTransport
     from desk.transport.whatsapp.client import make_client
     from desk.transport.whatsapp.templates import TemplateRegistry
@@ -140,7 +145,10 @@ def _serve(args: argparse.Namespace) -> None:
     calendar = TradingCalendar.load(FIXTURES / "calendar" / "NSE-CM-holidays-2026-v1.json")
     tg_transport, tg_client = make_telegram_transport(settings)
     if settings.telegram.live:
-        me = tg_client.get_me()
+        try:
+            me = tg_client.get_me()
+        except TelegramPollError as exc:
+            raise SystemExit(f"Telegram getMe failed: {describe(exc)}") from None
         if str(me.get("id")) != settings.telegram.bot_id:
             raise SystemExit("bot token and getMe disagree; check TELEGRAM_BOT_TOKEN")
         print(f"Telegram live as @{me.get('username')} (Bot API pin checked)")
@@ -152,24 +160,32 @@ def _serve(args: argparse.Namespace) -> None:
     )
     transports = {"whatsapp": WhatsAppTransport(make_client(settings)), "telegram": tg_transport}
     templates = TemplateRegistry.load(FIXTURES.parent / "config" / "whatsapp_templates.json")
-    while True:
-        report = run_cycle(
+    # fake mode polls the fake bot; live mode the real one (same id as the transport)
+    tg_settings = (
+        settings.telegram
+        if settings.telegram.live
+        else TelegramSettings(bot_token=f"{tg_transport.endpoint}:MOCK")
+    )
+
+    def cycle():
+        return run_cycle(
             factory,
             deps=deps,
             transports=transports,
             templates=templates,
             now=datetime.now(UTC),
-            telegram=(tg_client, settings.telegram),
+            telegram=(tg_client, tg_settings),
             auction_enabled=args.auction,
             poll_timeout_s=0 if args.once else min(args.interval, 25),
         )
-        print(
-            f"{datetime.now(UTC):%H:%M:%S}Z poll={report.poll} plan={report.plan} "
-            f"work={report.work} send={report.send}"
-        )
-        if args.once:
-            return
-        time.sleep(1)
+
+    def log(line: str) -> None:
+        print(f"{datetime.now(UTC):%H:%M:%S}Z {line}", flush=True)
+
+    try:
+        serve_loop(cycle, log=log, sleep=time.sleep, max_cycles=1 if args.once else None)
+    except TelegramFatalError as exc:
+        raise SystemExit(f"stopping: {describe(exc)}") from None
 
 
 if __name__ == "__main__":

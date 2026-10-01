@@ -24,7 +24,6 @@ from desk.runner import run_cycle
 from desk.transport.base import TELEGRAM
 from desk.transport.telegram.client import (
     FakeTelegram,
-    TelegramTransport,
     make_telegram_transport,
 )
 from desk.transport.telegram.poller import poll_once
@@ -39,8 +38,8 @@ ME, OTHER = 5550001, 5550002
 @pytest.fixture
 def tg():
     fake = FakeTelegram(bot_id=BOT.bot_id)
-    client = fake.client(TG.bot_token)
-    return fake, client, {"telegram": TelegramTransport(client)}
+    transport, client = fake.transport(TG.bot_token)
+    return fake, client, {"telegram": transport}
 
 
 def invite(db, now=None, ttl=timedelta(hours=72)):
@@ -285,7 +284,9 @@ def test_live_telegram_needs_flag_token_and_pinned_version():
 
 
 def test_stop_after_report_is_queued_cancels_it_on_telegram_too(db, tg, mock_calendar):
-    """No 24h window on Telegram does NOT mean no consent check: /stop still wins."""
+    """No 24h window on Telegram does NOT mean no consent check: a /stop committed before
+    the sender decides a part cancels it. (Cutoff for a send already in flight: see
+    test_stop_cutoff_is_the_per_message_send_decision.)"""
     fake, client, transports = tg
     _opted_in_tenant(db, fake, client)
     send(db, transports, ist(7, 6))  # welcome / opt-in replies out of the way
@@ -299,3 +300,248 @@ def test_stop_after_report_is_queued_cancels_it_on_telegram_too(db, tg, mock_cal
     send(db, transports, ist(8, 1))
     assert {p.state for p in out(db, kind="report_part")} == {"CANCELLED"}
     assert [c["method"] for c in fake.calls[n:]] == ["sendMessage"]  # only the STOP reply
+
+
+# ---- security review fixes (HIGH-1..3, MED-4..7) -----------------------------------------
+
+
+def _report_queued(db, fake, client, transports, mock_calendar):
+    _opted_in_tenant(db, fake, client)
+    send(db, transports, ist(7, 6))  # welcome / opt-in replies out of the way
+    with db() as s:
+        plan_day(s, mock_calendar, MOCK_DAY, ist(7, 20))
+        s.commit()
+    assert run_one(db, deps(Clock(ist(8, 0)), mock_calendar), "w1") == "done"
+    return len(fake.calls)
+
+
+def _settings(**tg):
+    return Settings(
+        mode="mock",
+        database_url=None,
+        model_adapter="mock",
+        feed_adapter="fixture",
+        telegram=TelegramSettings(**tg),
+    )
+
+
+def test_fake_mode_is_refused_while_a_real_token_is_set():
+    """HIGH-1: token present but not live -> no fake that could mark real rows SENT."""
+    with pytest.raises(GateBlockedError, match="refusing the in-memory fake"):
+        make_telegram_transport(_settings(bot_token=":".join(("8123456789", "x"))))
+    transport, _ = make_telegram_transport(_settings())
+    assert transport.endpoint == str(FakeTelegram().bot_id)
+
+
+def test_a_transport_only_sends_its_own_bots_rows(db, tg):
+    """HIGH-1/HIGH-2: rows of another bot (or of WhatsApp) are never claimed or touched."""
+    fake, client, transports = tg
+    _opted_in_tenant(db, fake, client)
+    other_bot = FakeTelegram(bot_id=4242424242)
+    other_transport, _ = other_bot.transport()
+    stats = send(db, {"telegram": other_transport}, ist(7, 6))
+    assert other_bot.calls == [] and stats.counts == {}
+    assert {r.state for r in out(db)} == {"PENDING"} and all(r.attempts == 0 for r in out(db))
+    send(db, transports, ist(7, 7))  # the right bot sends them
+    assert {r.state for r in out(db)} == {"SENT"}
+
+
+def test_logs_never_carry_the_token_via_exceptions_extra_or_stack(caplog, capsys):
+    """HIGH-3: exc_info, exc_text, stack_info, extra fields and uncaught exceptions."""
+    import sys
+    import threading
+
+    token = "8123456789:" + "AAE" + "q" * 32
+    url = f"https://api.telegram.org/bot{token}/getUpdates"
+    install()
+    log = logging.getLogger("desk.test")
+    with caplog.at_level(logging.DEBUG):
+        try:
+            raise httpx.ConnectError(f"failed {url}")
+        except httpx.ConnectError:
+            log.exception("poll failed")
+        log.warning("with extra", extra={"url": url, "attempt": 3}, stack_info=True)
+        log.error("plain %s", token)
+    assert token not in caplog.text and caplog.text.count("[REDACTED]") >= 2
+    assert caplog.records[1].url == "https://api.telegram.org/[REDACTED]/getUpdates"
+    for rec in caplog.records:
+        assert rec.exc_info is None  # raw traceback (and its frames' locals) dropped
+        assert token not in str(vars(rec))
+    assert caplog.records[1].attempt == 3  # untouched extra fields keep their type
+    raw = logging.makeLogRecord({"msg": f"direct {url}"})  # bypasses Logger.makeRecord
+    assert token not in logging.Formatter().format(raw)
+    try:
+        raise RuntimeError(url)
+    except RuntimeError:
+        sys.excepthook(*sys.exc_info())
+    t = threading.Thread(target=lambda: (_ for _ in ()).throw(RuntimeError(url)), name="tg")
+    t.start()
+    t.join()
+    err = capsys.readouterr().err
+    assert token not in err and err.count("[REDACTED]") >= 2
+
+
+def test_rate_limit_holds_later_parts_and_keeps_order(db, tg, mock_calendar):
+    """MED-4: a 429 on part 1 pauses the bot; parts 2-3 are released unspent and can
+    never overtake part 1."""
+    fake, client, transports = tg
+    n = _report_queued(db, fake, client, transports, mock_calendar)
+    fake.script = [
+        {"error_code": 429, "description": "Too Many", "parameters": {"retry_after": 60}}
+    ]
+    stats = send(db, transports, ist(8, 1))
+    parts = out(db, kind="report_part")
+    assert len(fake.calls) == n + 1 and stats.counts.get("HELD") == 2
+    assert [p.state for p in parts] == ["PENDING"] * 3
+    assert [p.attempts for p in parts] == [1, 0, 0]
+    send(db, transports, ist(8, 1) + timedelta(seconds=30))  # still cooling: nothing goes
+    assert len(fake.calls) == n + 1
+    send(db, transports, ist(8, 3))
+    assert [c["method"] for c in fake.calls[n:]] == [
+        "sendMessage",
+        "sendMessage",
+        "sendDocument",
+        "sendPhoto",
+    ]
+    assert [p.state for p in out(db, kind="report_part")] == ["SENT"] * 3
+
+
+def test_unclaimed_later_parts_wait_for_a_cooling_part_1(db, tg, mock_calendar):
+    """MED-4: parts never claimed in the 429 batch (limit) still may not overtake part 1."""
+    fake, client, transports = tg
+    n = _report_queued(db, fake, client, transports, mock_calendar)
+    fake.script = [
+        {"error_code": 429, "description": "Too Many", "parameters": {"retry_after": 60}}
+    ]
+    send_batch(db, transports, DRAFTS, ist(8, 1), limit=1)  # only part 1 claimed -> 429
+    send(db, transports, ist(8, 1) + timedelta(seconds=30))
+    assert len(fake.calls) == n + 1  # parts 2-3 are due, but their recipient is cooling
+    send(db, transports, ist(8, 3))
+    assert [c["method"] for c in fake.calls[n + 1 :]] == [
+        "sendMessage",
+        "sendDocument",
+        "sendPhoto",
+    ]
+
+
+def test_transient_poll_error_does_not_stop_the_cycle(db, tg, mock_calendar):
+    """MED-5: a 502 / network error on getUpdates skips that poll only."""
+    fake, client, transports = tg
+    _opted_in_tenant(db, fake, client)
+    for step in (502, httpx.ReadTimeout("slow"), {"error_code": 429, "description": "x"}):
+        fake.poll_script = [step]
+        r = run_cycle(
+            db,
+            deps=deps(Clock(ist(8, 0)), mock_calendar),
+            transports=transports,
+            templates=DRAFTS,
+            now=ist(8, 0),
+            telegram=(client, TG),
+        )
+        assert str(r.poll).startswith("poll skipped") and "bot" not in str(r.poll)
+    assert {r.state for r in out(db, kind="welcome")} == {"SENT"}
+
+
+@pytest.mark.parametrize("code", [401, 404, 409])
+def test_auth_and_conflict_poll_errors_are_fatal(db, tg, mock_calendar, code):
+    from desk.transport.telegram.client import TelegramFatalError
+
+    fake, client, transports = tg
+    fake.poll_script = [{"error_code": code, "description": "nope"}]
+    with pytest.raises(TelegramFatalError, match=str(code)):
+        run_cycle(
+            db,
+            deps=deps(Clock(ist(8, 0)), mock_calendar),
+            transports=transports,
+            templates=DRAFTS,
+            now=ist(8, 0),
+            telegram=(client, TG),
+        )
+
+
+def test_serve_loop_backs_off_boundedly_and_logs_no_secret():
+    """MED-5: errors never end the loop; waits double up to a cap and reset on success."""
+    from desk.runner import BACKOFF_MAX_S, CycleReport, serve_loop
+    from desk.transport.telegram.client import TelegramFatalError
+
+    token = "8123456789:" + "AAE" + "z" * 32
+    results = [RuntimeError(f"db down bot{token}")] * 8 + [CycleReport(), RuntimeError("x")]
+    lines, waits = [], []
+
+    def cycle():
+        r = results.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    serve_loop(cycle, log=lines.append, sleep=waits.append, max_cycles=10)
+    assert waits == [5, 10, 20, 40, 80, 160, 300, 300, 1, 5]
+    assert max(waits) == BACKOFF_MAX_S and not any(token in line for line in lines)
+
+    def fatal():
+        raise TelegramFatalError("getUpdates: 409 another poller")
+
+    with pytest.raises(TelegramFatalError):
+        serve_loop(fatal, log=lines.append, sleep=waits.append, max_cycles=3)
+
+
+def test_dedupe_survives_update_id_reset_and_stale_cursor_restarts(db, tg):
+    """MED-6: same (chat, message_id) under a new update_id is handled once; a cursor
+    idle longer than STALE_CURSOR is not trusted (Telegram re-randomises update_ids)."""
+    from desk.transport.telegram.poller import STALE_CURSOR
+
+    fake, client, _ = tg
+    _, code = invite(db)
+    fake.user_says(ME, f"/start {code}", update_id=5000, message_id=7)
+    assert poll(db, client, ist(7, 5)).handled == 1
+    assert poll(db, client, ist(7, 6)).received == 0 and fake.confirmed_offset == 5001
+    fake.user_says(ME, f"/start {code}", update_id=42, message_id=7)  # ids re-randomised
+    later = ist(7, 6) + STALE_CURSOR + timedelta(hours=1)
+    # Re-randomised ids only appear after 7 idle days; switching to offset 0 BEFORE that
+    # is what keeps a high stale offset from confirming (= dropping) a new low id.
+    assert STALE_CURSOR < timedelta(days=7)
+    r = poll(db, client, later)  # stale cursor: offset 0 re-reads all unconfirmed
+    assert r.received == 1 and r.handled == 1
+    assert len(tenants(db)) == 1 and len(out(db, kind="welcome")) == 1  # no second welcome
+    fake.user_says(ME, "what about nifty?", update_id=44, message_id=9)
+    poll(db, client, later + timedelta(seconds=10))
+    fake.user_says(ME, "what about nifty?", update_id=45, message_id=9)  # same message again
+    poll(db, client, later + timedelta(seconds=20))
+    assert len(out(db, kind="question_pending")) == 1  # one reply per Telegram message
+    fake.user_says(ME, "YES", update_id=46, message_id=8)
+    assert poll(db, client, later + timedelta(minutes=1)).handled == 1
+    with db() as s:
+        assert s.get(TransportCursor, ("telegram", TG.bot_id)).last_update_id == 46
+    assert tenants(db)[0].opt_in_state == "yes"
+
+
+def test_stop_cutoff_is_the_per_message_send_decision(db, tg, mock_calendar):
+    """MED-7: STOP takes effect for every message whose send decision is made after the
+    STOP is committed. A part already handed to Telegram when STOP arrives completes;
+    every later part is cancelled."""
+    fake, client, transports = tg
+    n = _report_queued(db, fake, client, transports, mock_calendar)
+    inner = transports["telegram"]
+    stopped = []
+
+    class StopDuringFirstSend:
+        caps, endpoint = inner.caps, inner.endpoint
+
+        def send_text(self, *a):
+            if not stopped:  # the person sends /stop while part 1 is in flight
+                fake.user_says(ME, "/stop")
+                stopped.append(poll(db, client, ist(8, 1)).handled)
+            return inner.send_text(*a)
+
+        def send_media(self, *a):
+            return inner.send_media(*a)
+
+        def send_template(self, *a):
+            return inner.send_template(*a)
+
+    send(db, {"telegram": StopDuringFirstSend()}, ist(8, 1))
+    assert stopped == [1]
+    assert [p.state for p in out(db, kind="report_part")] == ["SENT", "CANCELLED", "CANCELLED"]
+    assert [c["method"] for c in fake.calls[n:]] == ["sendMessage"]  # part 1 only
+    send(db, transports, ist(8, 2))
+    assert [c["method"] for c in fake.calls[n:]] == ["sendMessage", "sendMessage"]  # + STOP ack

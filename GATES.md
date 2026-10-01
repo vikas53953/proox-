@@ -47,3 +47,8 @@ test (owner only) happen without waiting for G02.
 | B02 encryption at rest covers Telegram ids | approved (with B02) |
 | **Before any user other than the owner:** an invite pre-binding rule for Telegram, and a privacy disclosure (Telegram bot chats are not end-to-end encrypted; Telegram stores them) | **required, not built** |
 | Delivery truth: Telegram reports no delivery/read receipts — SENT is final; timeouts stay UNKNOWN (no reconcile) | built |
+| Fake vs live: with a token set, the in-memory fake refuses to start (it could otherwise mark a real bot's rows SENT); each transport sends only rows of its own bot / phone id | built (security review HIGH-1/2) |
+| **STOP cutoff:** STOP applies to every message whose send decision is made after the STOP is committed. Consent is checked per message right before its send; a message already handed to Telegram when STOP arrives completes, every later part is cancelled. So a STOP during a report can still let at most the part in flight through | built, tested (MED-7) |
+| **24 h retention:** Telegram keeps unconfirmed messages for 24 h only. Messages sent to the bot while the desk is off for more than a day are lost (no error is shown to the sender) | known limit — owner to accept |
+| **Blocking is noticed late:** a person blocking the bot is only seen on the next send to them (403 → opt-out). The poller does not subscribe to `my_chat_member` updates | known limit |
+| Poll errors: network / 5xx / 429 skip that poll only; 401/404 (token rejected) and 409 (another poller or a webhook on the bot) stop `serve` with a clear message; other cycle errors retry with backoff 5 s → 300 s cap | built (MED-5) |

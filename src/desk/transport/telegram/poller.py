@@ -2,11 +2,16 @@
 
 Only private chats with real people are handled; groups, channels and other bots are
 skipped. The getUpdates offset is stored in Postgres so a restart neither loses nor
-re-handles messages (inbound message ids are also deduplicated, as for WhatsApp).
+re-handles messages. Inbound messages are deduplicated by (bot, chat, message_id), which
+Telegram never reuses, NOT by update_id: update_ids restart at a random value after a
+week without updates (MED-6). After STALE_CURSOR idle the stored offset is not trusted
+and polling restarts from offset 0 (all still-unconfirmed updates; the dedupe key makes
+that safe). Telegram keeps unconfirmed updates for 24 hours only: messages sent while
+the desk is off for more than a day are lost (owner-visible note in GATES.md, T1).
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -17,6 +22,11 @@ from desk.db.models import TransportCursor
 from desk.transport.telegram.client import TelegramClient
 from desk.transport.whatsapp.payload import InboundMessage
 from desk.transport.whatsapp.webhook import _process
+
+# Telegram re-randomises update_id after >= 7 days without updates. Polling with the old
+# (higher) offset would then confirm, i.e. silently drop, the new lower ids, so the switch
+# to offset 0 must happen BEFORE day 7.
+STALE_CURSOR = timedelta(days=6)
 
 
 @dataclass(frozen=True)
@@ -34,7 +44,7 @@ def to_inbound(update: dict, bot_id: str) -> InboundMessage | None:
         return None
     text = msg.get("text")
     return InboundMessage(
-        message_id=f"tg:{bot_id}:{update['update_id']}",
+        message_id=f"tg:{bot_id}:{chat['id']}:{msg.get('message_id')}",
         waba_id="",
         phone_number_id=bot_id,
         sender=str(chat["id"])[:20],
@@ -45,10 +55,14 @@ def to_inbound(update: dict, bot_id: str) -> InboundMessage | None:
     )
 
 
-def _cursor(factory: sessionmaker[Session], bot_id: str) -> int:
+def _offset(factory: sessionmaker[Session], bot_id: str, now: datetime) -> int:
+    """Next getUpdates offset. 0 = "everything not yet confirmed" (first run, or the
+    stored cursor is older than STALE_CURSOR and may be above re-randomised ids)."""
     with factory() as s:
         row = s.get(TransportCursor, ("telegram", bot_id))
-        return row.last_update_id if row else 0
+        if row is None or now - row.updated_at > STALE_CURSOR:
+            return 0
+        return row.last_update_id + 1
 
 
 def _save_cursor(factory: sessionmaker[Session], bot_id: str, last: int, now: datetime) -> None:
@@ -76,8 +90,9 @@ def poll_once(
     now: datetime,
     timeout_s: int = 0,
 ) -> PollResult:
-    last = _cursor(factory, tg.bot_id)
-    updates = client.get_updates(offset=last + 1, timeout_s=timeout_s)
+    offset = _offset(factory, tg.bot_id, now)
+    updates = client.get_updates(offset=offset, timeout_s=timeout_s)
+    last = offset - 1 if offset else 0
     handled = skipped = 0
     state = SimpleNamespace(settings=SimpleNamespace(whatsapp=tg), session_factory=factory)
     for update in sorted(updates, key=lambda u: u["update_id"]):
@@ -87,6 +102,6 @@ def poll_once(
         else:
             _process(state, [msg], now)
             handled += 1
-        last = max(last, int(update["update_id"]))
+        last = int(update["update_id"])  # sorted batch: the newest handled so far
         _save_cursor(factory, tg.bot_id, last, now)  # after handling: at-least-once
     return PollResult(len(updates), handled, skipped, last)

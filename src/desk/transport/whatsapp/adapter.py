@@ -14,6 +14,7 @@ class WhatsAppTransport:
 
     def __init__(self, client: GraphClient) -> None:
         self.client = client
+        self.endpoint = client.phone_number_id  # sends only this number's rows
 
     def send_text(self, to: str, body: str, ref: str) -> Outcome:
         return self.client.send(text_payload(to, body, ref))

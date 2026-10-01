@@ -18,6 +18,35 @@ MOCK_TOKEN = "0:MOCK"  # noqa: S105 - not token-shaped on purpose (E01 scan stay
 TIMEOUT = httpx.Timeout(35.0, connect=5.0)  # long-poll waits up to 25 s
 
 
+class TelegramPollError(RuntimeError):
+    """getUpdates/getMe failed. Messages never contain the request URL (it holds the token)."""
+
+
+class TelegramTransientError(TelegramPollError):
+    """Network trouble, 5xx, 429 or an unreadable answer: back off and try again."""
+
+
+class TelegramFatalError(TelegramPollError):
+    """Retrying cannot help: 401/404 (token rejected) or 409 (another poller or a webhook
+    is using this bot). The serve loop stops and tells the owner."""
+
+
+def _api_error(method: str, r: httpx.Response) -> TelegramPollError:
+    try:
+        body = r.json()
+    except json.JSONDecodeError:
+        body = {}
+    code = int(body.get("error_code", r.status_code)) if isinstance(body, dict) else r.status_code
+    desc = str(body.get("description", "") if isinstance(body, dict) else "")[:100]
+    if code in (401, 404):
+        return TelegramFatalError(f"{method}: {code} token rejected; check TELEGRAM_BOT_TOKEN")
+    if code == 409:
+        return TelegramFatalError(
+            f"{method}: 409 another getUpdates poller or a webhook is active for this bot"
+        )
+    return TelegramTransientError(f"{method}: {code} {desc}".rstrip())
+
+
 class TelegramClient:
     def __init__(self, http: httpx.Client, token: str) -> None:
         self._http = http
@@ -28,26 +57,28 @@ class TelegramClient:
     ) -> httpx.Response:
         return self._http.post(f"{self._base}/{method}", data=data, files=files, timeout=TIMEOUT)
 
+    def _read(self, method: str, data: dict | None = None):
+        """Call a read method; raise a typed, token-free error on any failure (MED-5)."""
+        try:
+            r = self._call(method, data=data)
+        except httpx.TransportError as exc:  # str(exc) is not used: keep URLs out
+            raise TelegramTransientError(f"{method}: {type(exc).__name__}") from None
+        try:
+            body = r.json()
+        except json.JSONDecodeError:
+            body = None
+        if r.status_code == 200 and isinstance(body, dict) and body.get("ok"):
+            return body["result"]
+        raise _api_error(method, r)
+
     def get_me(self) -> dict:
-        r = self._call("getMe")
-        body = r.json()
-        if not body.get("ok"):
-            raise RuntimeError("getMe failed: check the bot token")
-        return body["result"]
+        return self._read("getMe")
 
     def get_updates(self, offset: int, timeout_s: int = 25) -> list[dict]:
-        r = self._call(
+        return self._read(
             "getUpdates",
-            data={
-                "offset": offset,
-                "timeout": timeout_s,
-                "allowed_updates": json.dumps(["message"]),
-            },
+            {"offset": offset, "timeout": timeout_s, "allowed_updates": json.dumps(["message"])},
         )
-        body = r.json()
-        if not body.get("ok"):
-            raise RuntimeError(f"getUpdates failed: {body.get('description', '')[:100]}")
-        return body["result"]
 
     def send(self, method: str, data: dict, files: dict | None = None) -> Outcome:
         try:
@@ -77,14 +108,17 @@ class TelegramClient:
             )
         if code == 403:
             return Outcome(SendResult.BLOCKED, detail=f"403: {desc}")
+        if code in (401, 404):  # our token, not the recipient: keep the message for later
+            return Outcome(SendResult.RETRY, detail=f"{code}: bot token rejected")
         return Outcome(SendResult.FAILED, detail=f"{code}: {desc}")
 
 
 class TelegramTransport:
     caps = TELEGRAM
 
-    def __init__(self, client: TelegramClient) -> None:
+    def __init__(self, client: TelegramClient, bot_id: str) -> None:
         self.client = client
+        self.endpoint = str(bot_id)  # sends only rows of THIS bot (HIGH-1/HIGH-2)
 
     def send_text(self, to: str, body: str, ref: str) -> Outcome:
         return self.client.send(
@@ -116,18 +150,27 @@ class FakeTelegram:
         self.calls: list[dict] = []
         self.updates: list[dict] = []
         self.script: list = []  # per send: "ok" | dict error body | int status | Exception
+        self.poll_script: list = []  # per getUpdates, same items; then the real queue
         self._next_update = 1000
         self.confirmed_offset = 0
 
     def user_says(
-        self, user_id: int, text: str, chat_type: str = "private", is_bot: bool = False
+        self,
+        user_id: int,
+        text: str,
+        chat_type: str = "private",
+        is_bot: bool = False,
+        update_id: int | None = None,
+        message_id: int | None = None,
     ) -> int:
-        self._next_update += 1
+        """Queue one incoming message. update_id/message_id can be forced to simulate
+        Telegram re-randomising update ids or re-delivering the same message."""
+        self._next_update = update_id if update_id is not None else self._next_update + 1
         self.updates.append(
             {
                 "update_id": self._next_update,
                 "message": {
-                    "message_id": self._next_update,
+                    "message_id": message_id if message_id is not None else self._next_update,
                     "date": 1790000000,
                     "text": text,
                     "chat": {"id": user_id, "type": chat_type},
@@ -148,6 +191,13 @@ class FakeTelegram:
                 },
             )
         if method == "getUpdates":
+            step = self.poll_script.pop(0) if self.poll_script else "ok"
+            if isinstance(step, Exception):
+                raise step
+            if isinstance(step, int):
+                return httpx.Response(step, text="error")
+            if isinstance(step, dict):
+                return httpx.Response(step.get("error_code", 400), json={"ok": False, **step})
             form = dict(httpx.QueryParams(request.content.decode()))
             offset = int(form.get("offset", 0))
             self.confirmed_offset = max(self.confirmed_offset, offset)
@@ -185,6 +235,10 @@ class FakeTelegram:
     def client(self, token: str = MOCK_TOKEN) -> TelegramClient:
         return TelegramClient(httpx.Client(transport=httpx.MockTransport(self.handler)), token)
 
+    def transport(self, token: str = MOCK_TOKEN) -> "tuple[TelegramTransport, TelegramClient]":
+        client = self.client(token)
+        return TelegramTransport(client, str(self.bot_id)), client
+
 
 def make_telegram_transport(settings) -> "tuple[TelegramTransport, TelegramClient]":
     """Fake by default. Live api.telegram.org only when ALL hold: DESK_TELEGRAM_LIVE=1,
@@ -193,8 +247,12 @@ def make_telegram_transport(settings) -> "tuple[TelegramTransport, TelegramClien
 
     tg = settings.telegram
     if not tg.live:
-        client = FakeTelegram().client()
-        return TelegramTransport(client), client
+        if tg.bot_token:  # HIGH-1: a real bot's rows must never be "sent" by the fake
+            raise GateBlockedError(
+                "TELEGRAM_BOT_TOKEN is set but DESK_TELEGRAM_LIVE is not 1: refusing the "
+                "in-memory fake. Unset the token for mock runs, or set DESK_TELEGRAM_LIVE=1."
+            )
+        return FakeTelegram().transport()
     if not tg.bot_token:
         raise GateBlockedError("DESK_TELEGRAM_LIVE=1 but TELEGRAM_BOT_TOKEN is not set")
     if not TELEGRAM_BOT_API_VERSION:
@@ -202,4 +260,4 @@ def make_telegram_transport(settings) -> "tuple[TelegramTransport, TelegramClien
             "pin the Telegram Bot API version first (BOM.md, PC-SESSION-CHECKLIST.md step 2)"
         )
     client = TelegramClient(httpx.Client(), tg.bot_token)
-    return TelegramTransport(client), client
+    return TelegramTransport(client, tg.bot_id), client

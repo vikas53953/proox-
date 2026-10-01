@@ -67,6 +67,7 @@ CAPS = {c.name: c for c in (WHATSAPP, TELEGRAM)}
 
 class Transport(Protocol):
     caps: ChannelCaps
+    endpoint: str  # the one business endpoint (phone id / bot id) this transport may serve
 
     def send_text(self, to: str, body: str, ref: str) -> Outcome: ...
 

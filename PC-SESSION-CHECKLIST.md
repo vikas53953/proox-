@@ -33,6 +33,8 @@ there). Do them in this order; stop at the first failure and report it.
 ## 4. First live Telegram send
 
 - [ ] `DESK_TELEGRAM_LIVE=1`; the startup check (`getMe`) succeeds.
+- [ ] Only ONE `serve` per bot (a second poller gets 409 and `serve` stops).
+- [ ] For mock runs, unset `TELEGRAM_BOT_TOKEN` (the fake refuses to start while it is set).
 - [ ] Create a Telegram invite (24 h, single use) and open the printed t.me link.
 - [ ] /start → welcome + separate opt-in; reply YES.
 - [ ] Morning run delivers summary, PDF and chart; states show SENT

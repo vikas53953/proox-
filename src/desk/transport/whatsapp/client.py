@@ -77,6 +77,7 @@ class GraphClient:
 
     def __init__(self, http: httpx.Client, phone_number_id: str, access_token: str) -> None:
         self._http = http
+        self.phone_number_id = phone_number_id
         self._url = f"{GRAPH_BASE}/{GRAPH_API_VERSION}/{phone_number_id}/messages"
         self._media_url = f"{GRAPH_BASE}/{GRAPH_API_VERSION}/{phone_number_id}/media"
         self._headers = {"Authorization": f"Bearer {access_token}"}
