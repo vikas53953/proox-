@@ -1,0 +1,45 @@
+[project]
+name = "desk"
+version = "0.1.0"
+description = "WhatsApp-only Indian pre-market research desk (v1.3). Report-only: no broker, simulator or app."
+requires-python = "==3.13.15"
+# Exact pins mirror requirements.in; requirements.lock is the hash-locked install source.
+dependencies = [
+    "fastapi==0.142.2",
+    "pydantic==2.13.5",
+    "sqlalchemy==2.1.1",
+    "alembic==1.20.0",
+    "psycopg==3.3.6",
+    "httpx==0.28.1",
+    "uvicorn==0.54.0",
+    "matplotlib==3.11.2",
+    "reportlab==5.0.1",
+    "cryptography==50.0.2",
+    "Pillow==12.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "hypothesis==6.168.3",
+    "ruff==0.16.9",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "strict"
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "DTZ"]
+# S101 (assert) is fine inside tests only.
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
