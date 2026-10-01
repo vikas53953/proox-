@@ -11,6 +11,7 @@ No style/equivalent/latest substitution. Any change here is an owner decision (R
 | Python | 3.13.15 | **BLOCKED (env)** — this cloud env's network denies python.org / GitHub release downloads; installed uv 0.8.17 has no 3.13.15 build. Container has 3.13.14 — not used as a substitute. |
 | PostgreSQL | 17.11 | **BLOCKED (env)** — network denies apt.postgresql.org. Container has 16.14 — not used as a substitute. |
 | Meta Graph / WhatsApp Cloud API | v26.0 | Pinned in code (`desk/config.py`); account BLOCKED G02 |
+| Telegram Bot API (TEST transport, T1) | **TO PIN on owner's PC** — read https://core.telegram.org/bots/api#recent-changes, write it here + `config.TELEGRAM_BOT_API_VERSION` | api.telegram.org / core.telegram.org blocked in the cloud container. Methods used: getMe, getUpdates, sendMessage, sendDocument, sendPhoto. Called via pinned HTTPX; no Telegram SDK. |
 
 ## Python direct pins (15)
 

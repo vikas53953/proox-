@@ -81,7 +81,8 @@ DATA_URI = re.compile(r"data:[\w/+.-]+;base64,[A-Za-z0-9+/=]+")
 SECRET_PATTERNS = [
     re.compile(r"EAA[A-Za-z0-9]{40,}"),  # Meta/Graph access token shape
     re.compile(r"sk-[A-Za-z0-9_-]{20,}"),  # generic provider API key shape
-    re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS access key id
+    re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{30,}\b"),  # Telegram bot token shape  # AWS access key id
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
 ]
 
@@ -293,3 +294,8 @@ def test_secret_scan_still_sees_tokens_next_to_embedded_media():
     assert not any(
         p.search(DATA_URI.sub("data:", page.replace(token, ""))) for p in SECRET_PATTERNS
     )
+
+
+def test_secret_scan_flags_a_telegram_bot_token():
+    fake = "1234567890:" + "AAH" + "x" * 32  # token-shaped, built at runtime, not a real one
+    assert any(p.search(f"TELEGRAM_BOT_TOKEN={fake}") for p in SECRET_PATTERNS)

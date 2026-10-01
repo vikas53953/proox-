@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from desk.db.models import Inbound, Outbox, Tenant
 from desk.market_calendar import IST
+from desk.transport.base import CAPS, WHATSAPP
 from desk.transport.whatsapp.templates import Template, TemplateRegistry
 
 WINDOW = timedelta(hours=24)
@@ -38,8 +39,8 @@ class Decision:
     request_template: bool = False  # WAIT + queue one report_ready template
 
 
-def window_open(last_inbound: datetime | None, now: datetime) -> bool:
-    return last_inbound is not None and now - last_inbound < WINDOW
+def window_open(last_inbound: datetime | None, now: datetime, window: timedelta = WINDOW) -> bool:
+    return last_inbound is not None and now - last_inbound < window
 
 
 def ist_today(now: datetime) -> date:
@@ -49,20 +50,24 @@ def ist_today(now: datetime) -> date:
 def decide(
     session: Session, row: Outbox, tenant: Tenant | None, now: datetime, templates: TemplateRegistry
 ) -> Decision:
+    """Rules common to every channel first (expiry, opt-in, today-only), then the
+    channel's own rules: a 24h service window and templates only where the channel has
+    them (WhatsApp). Telegram has neither, so an opted-in person can be messaged any time."""
+    caps = CAPS.get(row.channel, WHATSAPP)
     if row.expires_at is not None and now >= row.expires_at:
         return Decision(Action.CANCEL, "expired: no longer useful after its time window")
     if not row.proactive:
+        if caps.service_window is None:
+            return Decision(Action.SEND_TEXT)
         if tenant is not None:
             last = tenant.last_inbound_at
         else:  # reply to someone who is not a tenant: use that message's own time
             inbound = session.get(Inbound, row.in_reply_to) if row.in_reply_to else None
             last = inbound.provider_time if inbound else None
-        if window_open(last, now):
+        if window_open(last, now, caps.service_window):
             return Decision(Action.SEND_TEXT)
         return Decision(Action.CANCEL, "reply window (24h) has passed")
 
-    if row.expires_at is not None and now >= row.expires_at:
-        return Decision(Action.CANCEL, "expired: no longer useful after its time window")
     if tenant is None or not tenant.report_opt_in:
         return Decision(Action.CANCEL, "not opted in to daily updates (or STOP)")
     if row.kind in DATED_ANY_DAY:
@@ -72,12 +77,14 @@ def decide(
             Action.CANCEL,
             f"stale: for {row.trading_date}, today is {ist_today(now)}; never sent as today's",
         )
+    if caps.service_window is None:  # no window, no templates (Telegram)
+        return Decision(Action.SEND_TEXT)
     if row.kind == TEMPLATE_KIND:
         tpl = templates.usable("report_ready")
         if tpl is None:
             return Decision(Action.WAIT, templates.why_not("report_ready"))
         return Decision(Action.SEND_TEMPLATE, template=tpl)
-    if window_open(tenant.last_inbound_at, now):
+    if window_open(tenant.last_inbound_at, now, caps.service_window):
         return Decision(Action.SEND_TEXT)
     if templates.usable("report_ready") is None:
         return Decision(Action.WAIT, "outside 24h window; " + templates.why_not("report_ready"))

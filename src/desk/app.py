@@ -9,12 +9,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from desk import SPEC_VERSION
 from desk.config import Settings, load_settings
 from desk.db.session import make_engine, make_session_factory
+from desk.logsafe import install as install_log_redaction
 from desk.transport.whatsapp.webhook import router as whatsapp_router
 
 
 def create_app(
     settings: Settings | None = None, session_factory: sessionmaker[Session] | None = None
 ) -> FastAPI:
+    install_log_redaction()
     settings = settings or load_settings()
     if session_factory is None and settings.database_url:
         session_factory = make_session_factory(make_engine(settings.database_url))

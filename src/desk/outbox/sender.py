@@ -8,6 +8,7 @@ been sent, so it is never resent blindly (RC10). Only a status receipt reconcile
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from functools import partial
 
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -15,14 +16,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from desk.db.models import Media, Outbox, Tenant
 from desk.outbox.policy import TEMPLATE_KIND, Action, decide
-from desk.transport.whatsapp.client import (
-    GraphClient,
-    Outcome,
-    SendResult,
-    media_payload,
-    template_payload,
-    text_payload,
-)
+from desk.transport.base import Outcome, SendResult, Transport
+from desk.transport.whatsapp.adapter import WhatsAppTransport
+from desk.transport.whatsapp.client import GraphClient
 from desk.transport.whatsapp.templates import TemplateRegistry
 
 SENDING_GRACE = timedelta(minutes=5)
@@ -83,8 +79,17 @@ def _record(row: Outbox, outcome: Outcome, now: datetime) -> str:
                 outcome.provider_message_id,
                 None,
             )
+        case SendResult.SENT:  # Telegram: accepted by its servers; nothing further reported
+            row.state, row.provider_message_id, row.error = (
+                "SENT",
+                outcome.provider_message_id,
+                None,
+            )
         case SendResult.RETRY if row.attempts < MAX_SEND_ATTEMPTS:
-            row.state, row.next_attempt_at = "PENDING", now + backoff(row.attempts)
+            wait = backoff(row.attempts)
+            if outcome.retry_after_s:
+                wait = max(wait, timedelta(seconds=outcome.retry_after_s))
+            row.state, row.next_attempt_at = "PENDING", now + wait
             row.error = f"retry later: {outcome.detail}"
         case SendResult.RETRY:
             row.state, row.error = "FAILED", f"gave up after {row.attempts}: {outcome.detail}"
@@ -94,6 +99,8 @@ def _record(row: Outbox, outcome: Outcome, now: datetime) -> str:
             row.state, row.error = "FAILED", outcome.detail
         case SendResult.UNKNOWN:
             row.state, row.error = "UNKNOWN", f"not resent: {outcome.detail}"
+        case SendResult.BLOCKED:
+            row.state, row.error = "FAILED", f"recipient blocked the bot: {outcome.detail}"
     return row.state
 
 
@@ -120,13 +127,21 @@ def _queue_template(session: Session, row: Outbox, now: datetime) -> None:
     )
 
 
+def _transports(client_or_map) -> dict[str, Transport]:
+    """Accept {channel: Transport}, or a bare WhatsApp GraphClient (older callers)."""
+    if isinstance(client_or_map, dict):
+        return client_or_map
+    return {"whatsapp": WhatsAppTransport(client_or_map)}
+
+
 def send_batch(
     factory: sessionmaker[Session],
-    client: GraphClient,
+    transports: "dict[str, Transport] | GraphClient",
     templates: TemplateRegistry,
     now: datetime,
     limit: int = 50,
 ) -> SendStats:
+    by_channel = _transports(transports)
     stats = SendStats()
     with factory() as s:
         for _ in range(sweep_stuck(s, now)):
@@ -137,6 +152,13 @@ def send_batch(
         with factory() as s:
             row = s.get(Outbox, row_id)
             tenant = s.get(Tenant, row.tenant_id) if row.tenant_id else None
+            transport = by_channel.get(row.channel)
+            if transport is None:
+                row.state, row.last_status_at = "WAITING_WINDOW", now
+                row.wait_reason = f"no transport configured for channel {row.channel}"
+                s.commit()
+                stats.add(row.state)
+                continue
             decision = decide(s, row, tenant, now, templates)
             if decision.action is Action.CANCEL:
                 row.state, row.error, row.last_status_at = "CANCELLED", decision.reason, now
@@ -152,34 +174,33 @@ def send_batch(
             if decision.action in (Action.CANCEL, Action.WAIT):
                 stats.add(row.state)
                 continue
+            to, ref, body = row.recipient, str(row.id), row.body
             if decision.action is Action.SEND_TEMPLATE:
                 t = decision.template
-                payload = template_payload(
-                    row.recipient, t.name, t.language, [f"{row.trading_date:%d %b %Y}"], str(row.id)
+                send = partial(
+                    transport.send_template,
+                    to,
+                    t.name,
+                    t.language,
+                    [f"{row.trading_date:%d %b %Y}"],
+                    ref,
                 )
             elif row.media_id is not None:
-                media = s.get(Media, row.media_id)
-                payload = None
-                upload = (media.content, media.mime, media.filename, media.kind)
+                m = s.get(Media, row.media_id)
+                send = partial(
+                    transport.send_media, to, m.kind, m.content, m.mime, m.filename, body, ref
+                )
             else:
-                payload = text_payload(row.recipient, row.body, str(row.id))
-        if payload is None:  # media: upload first (safe to repeat), then send
-            content, mime, filename, kind = upload
-            up = client.upload(content, mime, filename)
-            if up.result is not SendResult.ACCEPTED:
-                with factory() as s:
-                    stats.add(_record(s.get(Outbox, row_id), up, now))
-                    s.commit()
-                continue
-            payload = media_payload(
-                row.recipient, kind, up.provider_message_id, row.body, filename, str(row_id)
-            )
-        outcome = client.send(payload)  # network call outside any open transaction
+                send = partial(transport.send_text, to, body, ref)
+        outcome = send()  # network call outside any open transaction
         with factory() as s:
             row = s.get(Outbox, row_id, with_for_update=True)
             if row.state != "SENDING":  # a receipt already reconciled it meanwhile
                 stats.add(row.state)
                 continue
             stats.add(_record(row, outcome, now))
+            if outcome.result is SendResult.BLOCKED and row.tenant_id:
+                blocked = s.get(Tenant, row.tenant_id)
+                blocked.opt_in_state = "stopped"  # blocking the bot = opting out
             s.commit()
     return stats

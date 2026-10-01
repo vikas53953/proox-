@@ -184,3 +184,22 @@ class FakeTelegram:
 
     def client(self, token: str = MOCK_TOKEN) -> TelegramClient:
         return TelegramClient(httpx.Client(transport=httpx.MockTransport(self.handler)), token)
+
+
+def make_telegram_transport(settings) -> "tuple[TelegramTransport, TelegramClient]":
+    """Fake by default. Live api.telegram.org only when ALL hold: DESK_TELEGRAM_LIVE=1,
+    a token in the environment, and the Bot API version pinned (RC12)."""
+    from desk.config import TELEGRAM_BOT_API_VERSION, GateBlockedError
+
+    tg = settings.telegram
+    if not tg.live:
+        client = FakeTelegram().client()
+        return TelegramTransport(client), client
+    if not tg.bot_token:
+        raise GateBlockedError("DESK_TELEGRAM_LIVE=1 but TELEGRAM_BOT_TOKEN is not set")
+    if not TELEGRAM_BOT_API_VERSION:
+        raise GateBlockedError(
+            "pin the Telegram Bot API version first (BOM.md, PC-SESSION-CHECKLIST.md step 2)"
+        )
+    client = TelegramClient(httpx.Client(), tg.bot_token)
+    return TelegramTransport(client), client

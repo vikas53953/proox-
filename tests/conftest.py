@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, text
 
 from desk.agents.model import MockModelAdapter
 from desk.config import Settings, WhatsAppSettings
+from desk.db.models import Base
 from desk.db.session import make_engine, make_session_factory
 from desk.feeds.fixture import FixtureFeed
 from desk.lenses.context import ReportKind
@@ -55,17 +56,6 @@ def build_report(mock_calendar):
 # a fresh throwaway database, migrates it with Alembic, and drops it afterwards.
 
 
-TABLES = (
-    "outbox",
-    "inbound_messages",
-    "message_bodies",
-    "reports",
-    "agent_bindings",
-    "invites",
-    "tenants",
-)
-
-
 @pytest.fixture(scope="session")
 def pg_url():
     admin_url = os.environ.get("DESK_TEST_DATABASE_URL")
@@ -101,7 +91,9 @@ def db(migrated):
     factory = make_session_factory(migrated)
     yield factory
     with migrated.begin() as conn:
-        conn.execute(text(f"TRUNCATE {', '.join(TABLES)} CASCADE"))
+        # every table in the schema (never a hand-kept list: new tables can't be missed)
+        tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
+        conn.execute(text(f"TRUNCATE {tables} CASCADE"))
 
 
 @pytest.fixture

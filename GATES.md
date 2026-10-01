@@ -32,3 +32,18 @@ WhatsApp Business Platform / Cloud API documentation for **v26.0** when G02 is c
 - [ ] Status webhook shape (`statuses[].id/status/timestamp/recipient_id/errors`) matches `transport/whatsapp/payload.py`.
 - [ ] Media upload (`/{phone_number_id}/media`) and document/image send payloads match `transport/whatsapp/client.py` (added in M4).
 - [ ] Template names, languages, categories and APPROVED status come from the real account, not the drafts in `config/whatsapp_templates.json`.
+
+## T1 — Telegram TEST transport (owner-approved 2026-10-01; not a product channel)
+
+WhatsApp stays the product channel (specs unchanged). Telegram lets the first real-user
+test (owner only) happen without waiting for G02.
+
+| Rule | Status |
+|---|---|
+| Long polling only (`getUpdates`), no public endpoint, no new HTTP route | approved |
+| Bot API version pinned in `config.TELEGRAM_BOT_API_VERSION` + BOM.md; live mode refuses to start until set | approved — **to do on the owner's PC** (PC-SESSION-CHECKLIST.md step 2) |
+| Bot token: environment variable on the owner's PC only, test-only, interim until the G05 secret store; never in code, chat, logs, commits; E01 secret scan flags token shapes; logs are redacted | approved |
+| Invite: deep link `t.me/<bot>?start=<code>`, single use, max 24 h | approved |
+| B02 encryption at rest covers Telegram ids | approved (with B02) |
+| **Before any user other than the owner:** an invite pre-binding rule for Telegram, and a privacy disclosure (Telegram bot chats are not end-to-end encrypted; Telegram stores them) | **required, not built** |
+| Delivery truth: Telegram reports no delivery/read receipts — SENT is final; timeouts stay UNKNOWN (no reconcile) | built |

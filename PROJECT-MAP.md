@@ -45,6 +45,12 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `db/session.py` | Opens the database connection (PostgreSQL via psycopg only) |
 | `transport/whatsapp/signature.py` | Checks Meta's signature on every incoming webhook (secret-based fingerprint) |
 | `transport/whatsapp/payload.py` | Reads the incoming WhatsApp message; sender = transport id, never the display name |
+| `transport/base.py` | What every channel must offer + each channel's rules (window, templates, receipts) |
+| `transport/whatsapp/adapter.py` | WhatsApp behind that common interface |
+| `transport/telegram/client.py` | Telegram TEST transport: Bot API calls, in-memory fake, live-mode gate |
+| `transport/telegram/poller.py` | Reads new Telegram messages (long polling) into the same onboarding/chat code |
+| `runner.py` | PC test loop: poll Telegram -> plan today -> run worker -> send |
+| `logsafe.py` | Scrubs tokens from every log line (Telegram's token sits in its URLs) |
 | `transport/whatsapp/client.py` | Talks to the WhatsApp send API; only the in-memory fake exists while G02 is blocked |
 | `transport/whatsapp/templates.py` | List of message templates and their Meta status; only APPROVED ones may be used |
 | `transport/whatsapp/webhook.py` | The webhook itself: size limit → signature → parse → one transaction per message |
@@ -98,6 +104,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `test_e03_report.py` | All 15 lenses; every fact sourced; missing data shown as missing, never as a number |
 | `test_e04_isolation.py` | Tenants can't see each other; injected text can't trigger tools; secrets never shown |
 | `test_e05_delivery.py` | Report → parts → accepted/delivered/read/failed/UNKNOWN; 24h window and template rules; stale never sent |
+| `test_t01_telegram.py` | Telegram: deep-link invite, no window/templates, SENT is final, retry-after, blocked = opt-out, /stop wins, token never in logs |
 | `test_e08_followup.py` | STOP/START, 09:12 addendum (and its 09:15 expiry), TEXT command, feedback, corrections |
 | `test_d03_media.py` | Real pixel + PDF checks: 390 px preview, greyscale, opaque, labels, manifest, page X of Y, searchable text |
 | `test_e06_golden.py` | Maths gives the hand-checked answers; no peeking ahead; contradictions caught; no certainty words |
