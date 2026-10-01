@@ -38,7 +38,7 @@ def check_language(text: str) -> None:
 
 
 class Scenario(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")  # injected fields fail loudly
 
     path: ScenarioPath
     condition: str

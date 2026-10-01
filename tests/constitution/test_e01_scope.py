@@ -146,8 +146,23 @@ def test_installed_environment_equals_lockfile(repo_root):
 # ---- RC01: report-only scope -----------------------------------------------------------
 
 
+def _all_paths(routes, prefix: str = "") -> set[str]:
+    """Walk every route, including routers nested via include_router. Fail closed on
+    any route type we do not understand, so nothing can hide from the allowlist."""
+    paths: set[str] = set()
+    for route in routes:
+        if hasattr(route, "path"):
+            paths.add(prefix + route.path)
+        elif hasattr(route, "original_router"):
+            paths |= _all_paths(route.original_router.routes, prefix + route.include_context.prefix)
+        else:
+            raise AssertionError(f"unknown route type {type(route).__name__}")
+    return paths
+
+
 def test_http_routes_are_allowlisted():
-    paths = {route.path for route in create_app().routes}
+    paths = _all_paths(create_app().routes)
+    assert "/webhooks/whatsapp" in paths
     assert paths <= ALLOWED_ROUTES, f"unexpected routes: {paths - ALLOWED_ROUTES}"
     for path in paths:
         assert not any(word in path.lower() for word in FORBIDDEN_ROUTE_WORDS), path
@@ -217,3 +232,23 @@ def test_no_secrets_in_tracked_files(repo_root):
         text = path.read_text(errors="ignore")
         for pattern in SECRET_PATTERNS:
             assert not pattern.search(text), f"possible secret in {rel}"
+
+
+def test_postgres_server_is_exact_pin(migrated):
+    from sqlalchemy import text
+
+    with migrated.connect() as conn:
+        version = conn.execute(text("SHOW server_version")).scalar().split()[0]
+    assert version == "17.11", f"PostgreSQL {version} != pinned 17.11"
+
+
+def test_migrations_match_models(migrated):
+    """The Alembic schema and the SQLAlchemy models must not drift apart."""
+    from alembic.autogenerate import compare_metadata
+    from alembic.migration import MigrationContext
+
+    from desk.db.models import Base
+
+    with migrated.connect() as conn:
+        diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
+    assert diff == []

@@ -1,0 +1,140 @@
+"""Record contracts from Technical spec v1.3 (Invite, Tenant, AgentBinding, Inbound,
+Outbox, StoredReport). Times are stored in UTC.
+
+Privacy (RC08): invite codes are stored only as a SHA-256 hash; inbound text is stored
+with invite codes redacted; every tenant-owned row carries tenant_id.
+"""
+
+import uuid
+from datetime import date, datetime
+
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+UTC_TS = DateTime(timezone=True)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Invite(Base):
+    __tablename__ = "invites"
+    __table_args__ = (
+        CheckConstraint(
+            "token_hash IS NOT NULL OR bound_sender IS NOT NULL", name="invite_has_code_or_sender"
+        ),
+        CheckConstraint("state IN ('open', 'consumed', 'revoked')", name="invite_state"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    bound_sender: Mapped[str | None] = mapped_column(String(20), index=True)
+    business_phone_id: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(UTC_TS)
+    expires_at: Mapped[datetime] = mapped_column(UTC_TS)
+    state: Mapped[str] = mapped_column(String(16), default="open")
+    consumed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"))
+    consumed_at: Mapped[datetime | None] = mapped_column(UTC_TS)
+
+
+class Tenant(Base):
+    __tablename__ = "tenants"
+    __table_args__ = (
+        UniqueConstraint("business_phone_id", "sender", name="tenant_identity"),
+        CheckConstraint(
+            "opt_in_state IN ('unasked', 'asked', 'yes', 'no', 'stopped')",
+            name="tenant_opt_in_state",
+        ),
+        CheckConstraint("state IN ('pending', 'ready')", name="tenant_state"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    business_phone_id: Mapped[str] = mapped_column(String(32))
+    sender: Mapped[str] = mapped_column(String(20))  # WhatsApp wa_id from transport only
+    language: Mapped[str] = mapped_column(String(32), default="hinglish-roman")
+    opt_in_state: Mapped[str] = mapped_column(String(16), default="unasked")
+    state: Mapped[str] = mapped_column(String(16), default="pending")
+    pending_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTC_TS)
+    last_inbound_at: Mapped[datetime | None] = mapped_column(UTC_TS)
+
+    @property
+    def report_opt_in(self) -> bool:
+        return self.opt_in_state == "yes"
+
+
+class AgentBinding(Base):
+    __tablename__ = "agent_bindings"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
+    chief_identity: Mapped[str] = mapped_column(String(64))
+    research_identity: Mapped[str] = mapped_column(String(64))
+    reviewer_identity: Mapped[str] = mapped_column(String(64))
+    vm_ids: Mapped[dict | None] = mapped_column(JSON)  # G05: no VMs allocated yet
+    capacity: Mapped[str] = mapped_column(String(64))
+
+
+class MessageBody(Base):
+    __tablename__ = "message_bodies"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), index=True)
+    body_redacted: Mapped[str] = mapped_column(Text)
+
+
+class Inbound(Base):
+    __tablename__ = "inbound_messages"
+
+    message_id: Mapped[str] = mapped_column(String(128), primary_key=True)  # dedupe key
+    business_phone_id: Mapped[str] = mapped_column(String(32))
+    sender: Mapped[str] = mapped_column(String(20), index=True)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), index=True)
+    provider_time: Mapped[datetime] = mapped_column(UTC_TS)
+    received_at: Mapped[datetime] = mapped_column(UTC_TS)
+    type: Mapped[str] = mapped_column(String(32))
+    safe_content_ref: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("message_bodies.id"))
+    handled_as: Mapped[str] = mapped_column(String(32), default="received")
+
+
+class Outbox(Base):
+    """Messages waiting to be sent. M3 adds sending, receipts and delivery states."""
+
+    __tablename__ = "outbox"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    idempotency_key: Mapped[str] = mapped_column(String(200), unique=True)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), index=True)
+    business_phone_id: Mapped[str] = mapped_column(String(32))
+    recipient: Mapped[str] = mapped_column(String(20), index=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    body: Mapped[str] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(String(16), default="PENDING")
+    created_at: Mapped[datetime] = mapped_column(UTC_TS)
+    in_reply_to: Mapped[str | None] = mapped_column(String(128))
+
+
+class StoredReport(Base):
+    __tablename__ = "reports"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "report_id", "version", name="report_version_per_tenant"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    report_id: Mapped[str] = mapped_column(String(64))
+    trading_date: Mapped[date] = mapped_column(Date)
+    version: Mapped[int] = mapped_column(Integer)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    body: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(UTC_TS)

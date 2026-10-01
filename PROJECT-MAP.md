@@ -1,6 +1,6 @@
 # Project map
 
-Plain-words role of every folder and key file. Refreshed each milestone (last: M1).
+Plain-words role of every folder and key file. Refreshed each milestone (last: M2).
 
 ## Top level
 
@@ -13,15 +13,26 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `pyproject.toml` | Project settings: exact pins, test and lint settings |
 | `requirements*.in` / `requirements*.lock` | Pinned direct packages / every package with checksums |
 | `.env.example` | Setting names with empty placeholders — never real secrets |
+| `alembic.ini`, `alembic/` | Database schema changes (migrations). `versions/0001_initial_schema.py` creates all M2 tables |
 | `samples/` | Text output of mock reports, so you can read one without running anything |
 
 ## `src/desk/` — the program
 
 | Path | What it does |
 |---|---|
-| `__main__.py` | `python -m desk report ...` — prints a MOCK report |
+| `__main__.py` | `python -m desk report ...` prints a MOCK report; `python -m desk invite ...` creates an invite (operator only, code shown once) |
 | `config.py` | Reads settings; refuses any real adapter while gates are blocked |
-| `app.py` | Web front door: health check only (WhatsApp webhook comes in M2) |
+| `app.py` | Web front door: WhatsApp webhook + health check, nothing else |
+| `tenancy.py` | The only way to read a tenant's data; another tenant's row looks exactly like "not found" |
+| `db/models.py` | Database tables: invites, tenants, agent bindings, inbound messages, outbox, reports |
+| `db/session.py` | Opens the database connection (PostgreSQL via psycopg only) |
+| `transport/whatsapp/signature.py` | Checks Meta's signature on every incoming webhook (secret-based fingerprint) |
+| `transport/whatsapp/payload.py` | Reads the incoming WhatsApp message; sender = transport id, never the display name |
+| `transport/whatsapp/webhook.py` | The webhook itself: size limit → signature → parse → one transaction per message |
+| `onboarding/invites.py` | Makes invite codes; stores only their fingerprint (hash); hides codes in stored text |
+| `onboarding/service.py` | One message in: dedupe → existing tenant? reply : try invite → welcome + opt-in question |
+| `onboarding/messages.py` | The reply texts (Roman Hinglish), from the design doc drafts |
+| `agents/tools.py` | Which role may use which tool; anything requested by outside text is refused |
 | `market_calendar.py` | Is today a trading day? What is 08:45 / 09:12 IST in UTC? Previous trading day |
 | `pipeline.py` | The whole morning run: calendar → collect data → R01–R15 → review → report |
 | `core/facts.py` | A **Fact** (value + source + time + instrument + unit) and a **Gap** (missing, with a reason, no value) |
@@ -56,12 +67,17 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `market/2026-10-01/stale_quote/` | Same, but the S&P 500 quote is two days old |
 | `market/2026-10-01/no_orderflow_rights/` | Same, but the feed has no right to trade data |
 | `market/2026-10-01/prior_session_stale/` | Same, but the sector file is from the wrong day |
+| `market/2026-10-01/malicious_source/` | Adds a news item that tries to give orders (prompt injection) |
 | `market/2026-10-01/auction_mock/` | Adds 09:08 pre-open data for the 09:12 addendum |
 
 ## `tests/constitution/` — proof of the rules
 
 | Path | What it proves |
 |---|---|
-| `test_e01_scope.py` | No broker/app/trade code; exact versions; gates can't be bypassed; no secrets |
+| `test_e01_scope.py` | No broker/app/trade code; exact Python + PostgreSQL versions; migrations match tables; gates can't be bypassed; no secrets |
+| `test_e02_onboarding.py` | Signed webhook → exactly one tenant + one welcome; replays, races, bad/expired/forwarded invites leak nothing |
 | `test_e03_report.py` | All 15 lenses; every fact sourced; missing data shown as missing, never as a number |
+| `test_e04_isolation.py` | Tenants can't see each other; injected text can't trigger tools; secrets never shown |
 | `test_e06_golden.py` | Maths gives the hand-checked answers; no peeking ahead; contradictions caught; no certainty words |
+
+| `tests/whatsapp_helpers.py` | Builds signed fake WhatsApp webhooks for tests |

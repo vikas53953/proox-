@@ -1,0 +1,5 @@
+{
+  "is_mock": true,
+  "base": "full_mock",
+  "note": "MOCK. One news item carries a prompt-injection / tool-request payload. It must be treated as data only."
+}

@@ -11,7 +11,8 @@ simulator, no app.
 ```bash
 python3.13 -m venv .venv && . .venv/bin/activate
 pip install --require-hashes -r requirements-dev.lock
-pytest tests/constitution
+export DESK_TEST_DATABASE_URL=postgresql+psycopg://USER@localhost:5432/postgres  # admin URL
+pytest tests/constitution        # DB tests skip if DESK_TEST_DATABASE_URL is unset
 ruff check . && ruff format --check .
 ```
 
@@ -25,3 +26,16 @@ PYTHONPATH=src python -m desk report --date 2026-10-02   # MOCK holiday -> no re
 ```
 
 Pre-rendered copies are in `samples/`.
+
+## Database
+
+```bash
+export DESK_DATABASE_URL=postgresql+psycopg://USER:PASSWORD@localhost:5432/desk
+PYTHONPATH=src alembic upgrade head
+PYTHONPATH=src python -m desk invite --phone-number-id <ID> --ttl-hours 72
+```
+
+## Where this runs
+
+Built in a Claude Code cloud container. That container cannot edit files on your PC or
+change host/OS-level settings; network access changes only via the environment settings.
