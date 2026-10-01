@@ -20,9 +20,12 @@ from desk.feeds.base import FeedAdapter
 from desk.jobs.queue import StaleLeaseError, complete, expire_overdue, fail, lease_next
 from desk.lenses.context import ReportKind
 from desk.market_calendar import TradingCalendar
-from desk.outbox.notices import enqueue_failure_notice, enqueue_report
-from desk.outbox.parts import report_parts
+from desk.outbox.addendum import addendum_text
+from desk.outbox.notices import enqueue_failure_notice, enqueue_message, enqueue_report
+from desk.outbox.parts import delivery_plan
 from desk.pipeline import NoReport, run_report
+from desk.render.charts import report_charts
+from desk.render.pdf import FontBlockedError, render_pdf
 from desk.report.model import IncompleteReportError, ReviewRejectedError
 from desk.tenancy import TenantScope
 
@@ -95,12 +98,25 @@ def run_one(factory: sessionmaker[Session], deps: Deps, worker: str) -> str:
         )
 
     ready_at = deps.clock()
-    with factory() as s:
-        try:
-            if isinstance(result, NoReport):
+    if isinstance(result, NoReport):
+        with factory() as s:
+            try:
                 complete(s, lease, {"no_report": result.reason}, ready_at)
                 s.commit()
-                return "no_report"
+            except StaleLeaseError:
+                return "stale"
+        return "no_report"
+    if lease.kind == "AUCTION_ADDENDUM":
+        return _publish_addendum(factory, lease, result, ready_at)
+
+    charts = report_charts(result)  # rendering happens before the fenced transaction
+    try:
+        pdf = render_pdf(result, charts)
+    except FontBlockedError:
+        pdf = None  # real reports: font BLOCKED -> full text parts instead
+    parts = delivery_plan(result, ready_at, lease.deadline_at, charts, pdf)
+    with factory() as s:
+        try:
             complete(
                 s,
                 lease,
@@ -108,13 +124,13 @@ def run_one(factory: sessionmaker[Session], deps: Deps, worker: str) -> str:
                     "report_id": result.id,
                     "version": result.version,
                     "hash": result.content_hash,
+                    "parts": len(parts),
+                    "pdf": pdf is not None,
                     "late": ready_at > lease.deadline_at,
                 },
                 ready_at,
             )
-            parts = report_parts(result, ready_at, lease.deadline_at)
             for tenant in _opted_in(s):
-                scope = TenantScope(s, tenant.id)
                 if not s.execute(
                     select(StoredReport.id).where(
                         StoredReport.tenant_id == tenant.id,
@@ -122,13 +138,53 @@ def run_one(factory: sessionmaker[Session], deps: Deps, worker: str) -> str:
                         StoredReport.version == result.version,
                     )
                 ).first():
-                    scope.save_report(result, ready_at)
+                    TenantScope(s, tenant.id).save_report(result, ready_at)
                 enqueue_report(s, tenant, result, parts, ready_at)
             s.commit()
         except StaleLeaseError:
             s.rollback()
             return "stale"
     return "done:late" if ready_at > lease.deadline_at else "done"
+
+
+def _morning_ref(session: Session, day: date) -> str | None:
+    job = session.execute(
+        select(Job).where(
+            Job.kind == "MORNING_REPORT", Job.trading_date == day, Job.state == "DONE"
+        )
+    ).scalar_one_or_none()
+    if job is None or not job.result or "report_id" not in job.result:
+        return None
+    return f"{job.result['report_id']} v{job.result['version']}"
+
+
+def _publish_addendum(factory, lease, auction, ready_at: datetime) -> str:
+    with factory() as s:
+        try:
+            complete(
+                s,
+                lease,
+                {"report_id": auction.id, "version": auction.version, "hash": auction.content_hash},
+                ready_at,
+            )
+            text = addendum_text(auction, _morning_ref(s, lease.trading_date))
+            for tenant in _opted_in(s):
+                enqueue_message(
+                    s,
+                    tenant,
+                    key=f"addendum:{auction.id}:v{auction.version}:{tenant.id}",
+                    kind="addendum",
+                    body=text,
+                    now=ready_at,
+                    trading_date=lease.trading_date,
+                    report=auction,
+                    expires_at=lease.hard_stop_at,
+                )
+            s.commit()
+        except StaleLeaseError:
+            s.rollback()
+            return "stale"
+    return "done:addendum"
 
 
 def job_state(factory: sessionmaker[Session], kind: str, day: date) -> Job | None:

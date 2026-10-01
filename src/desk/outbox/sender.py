@@ -13,12 +13,13 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, sessionmaker
 
-from desk.db.models import Outbox, Tenant
+from desk.db.models import Media, Outbox, Tenant
 from desk.outbox.policy import TEMPLATE_KIND, Action, decide
 from desk.transport.whatsapp.client import (
     GraphClient,
     Outcome,
     SendResult,
+    media_payload,
     template_payload,
     text_payload,
 )
@@ -156,8 +157,23 @@ def send_batch(
                 payload = template_payload(
                     row.recipient, t.name, t.language, [f"{row.trading_date:%d %b %Y}"], str(row.id)
                 )
+            elif row.media_id is not None:
+                media = s.get(Media, row.media_id)
+                payload = None
+                upload = (media.content, media.mime, media.filename, media.kind)
             else:
                 payload = text_payload(row.recipient, row.body, str(row.id))
+        if payload is None:  # media: upload first (safe to repeat), then send
+            content, mime, filename, kind = upload
+            up = client.upload(content, mime, filename)
+            if up.result is not SendResult.ACCEPTED:
+                with factory() as s:
+                    stats.add(_record(s.get(Outbox, row_id), up, now))
+                    s.commit()
+                continue
+            payload = media_payload(
+                row.recipient, kind, up.provider_message_id, row.body, filename, str(row_id)
+            )
         outcome = client.send(payload)  # network call outside any open transaction
         with factory() as s:
             row = s.get(Outbox, row_id, with_for_update=True)

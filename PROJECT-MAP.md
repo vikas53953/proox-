@@ -1,6 +1,6 @@
 # Project map
 
-Plain-words role of every folder and key file. Refreshed each milestone (last: M3).
+Plain-words role of every folder and key file. Refreshed each milestone (last: M4).
 
 ## Top level
 
@@ -14,9 +14,9 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `pyproject.toml` | Project settings: exact pins, test and lint settings |
 | `requirements*.in` / `requirements*.lock` | Pinned direct packages / every package with checksums |
 | `.env.example` | Setting names with empty placeholders — never real secrets |
-| `alembic.ini`, `alembic/` | Database schema changes. `0001` = M2 tables; `0002` = jobs, delivery states, receipts |
+| `alembic.ini`, `alembic/` | Database schema changes. `0001` = M2 tables; `0002` = jobs, delivery states, receipts; `0003` = media, feedback, corrections |
 | `config/whatsapp_templates.json` | Template drafts from the design doc — status DRAFT, not submitted (G02) |
-| `samples/` | Text output of mock reports, so you can read one without running anything |
+| `samples/` | Mock reports as text, plus `samples/media/`: the PDF, the chart PNG and its manifest — open them directly |
 
 ## `src/desk/` — the program
 
@@ -28,11 +28,16 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `jobs/scheduler.py` | Writes one dated job per day (07:30 start, 08:45 target, 09:15 hard stop); holidays get a SKIPPED row with the reason |
 | `jobs/queue.py` | Hands a job to one worker at a time; a numbered "lease" stops an old worker from publishing |
 | `jobs/worker.py` | Runs one job: build report → in one go mark DONE + save + queue parts; on failure retry, then tell users plainly |
-| `outbox/parts.py` | Cuts a report into numbered WhatsApp parts; every part repeats id, version, date, as-of, part i/n |
+| `outbox/parts.py` | Delivery plan: 1 summary text, 2 PDF, 3 chart — every part/caption repeats id, version, date, as-of, part i/n; text parts if no PDF |
 | `outbox/notices.py` | Queues report parts and the "no report today" notice (fixed wording, no internal errors) |
 | `outbox/policy.py` | Right before sending: opted in? today's report? inside 24h window? approved template? else wait/cancel |
 | `outbox/sender.py` | Sends queued messages; a send with no clear answer becomes UNKNOWN and is never resent blindly |
 | `outbox/receipts.py` | Meta's delivery receipts → SENT / DELIVERED / READ / FAILED, only ever forward |
+| `render/palette.py` | Design-doc colours + a contrast calculator (text >= 4.5:1, marks >= 3:1) |
+| `render/charts.py` | Sector-returns chart (PNG) from sourced facts only; refuses clipped/overlapping text; writes a manifest |
+| `render/pdf.py` | Full R01-R15 PDF: header/footer + "page X of Y" on every page; refuses real reports while the font is blocked |
+| `outbox/addendum.py` | The 09:12 "indicative auction" update message; expires at 09:15 |
+| `feedback.py` | USEFUL / NOT USEFUL / FEEDBACK text, and operator corrections that never change the original report |
 | `tenancy.py` | The only way to read a tenant's data; another tenant's row looks exactly like "not found" |
 | `db/models.py` | Database tables: invites, tenants, agent bindings, inbound messages, outbox, reports |
 | `db/session.py` | Opens the database connection (PostgreSQL via psycopg only) |
@@ -91,8 +96,11 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `test_e03_report.py` | All 15 lenses; every fact sourced; missing data shown as missing, never as a number |
 | `test_e04_isolation.py` | Tenants can't see each other; injected text can't trigger tools; secrets never shown |
 | `test_e05_delivery.py` | Report → parts → accepted/delivered/read/failed/UNKNOWN; 24h window and template rules; stale never sent |
+| `test_e08_followup.py` | STOP/START, 09:12 addendum (and its 09:15 expiry), TEXT command, feedback, corrections |
+| `test_d03_media.py` | Real pixel + PDF checks: 390 px preview, greyscale, opaque, labels, manifest, page X of Y, searchable text |
 | `test_e06_golden.py` | Maths gives the hand-checked answers; no peeking ahead; contradictions caught; no certainty words |
 
 | `tests/whatsapp_helpers.py` | Builds signed fake WhatsApp webhooks for tests |
 | `tests/constitution/test_e07_failures.py` | Worker crash, stale lease, feed/DB/budget failure, late and missed-deadline cases are all visible, never silent |
 | `tests/delivery_helpers.py` | Fake clock, quick tenants and worker setup for delivery tests |
+| `tests/media_helpers.py` | Reads text out of our PDFs without extra libraries (proves the text is searchable) |

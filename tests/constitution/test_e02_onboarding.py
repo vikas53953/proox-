@@ -313,3 +313,14 @@ def test_voice_note_gets_text_only_notice(client, db, wa_settings):
     _bind(client, db, wa_settings)
     post(client, wa_settings, payload(wa_settings, message(ALICE, None, msg_type="audio")))
     assert outbox(db, ALICE)[-1].kind == "text_only"
+
+
+def test_bound_tenant_message_containing_a_code_is_still_answered(client, db, wa_settings):
+    """Only a bare "Hi <code>" is a repeat invite; any other text is a real message."""
+    _, code = make_invite(db, wa_settings)
+    post(client, wa_settings, payload(wa_settings, message(ALICE, f"Hi {code}")))
+    post(client, wa_settings, payload(wa_settings, message(ALICE, f"why did {code} expire?")))
+    assert outbox(db, ALICE)[-1].kind == "question_pending"
+    with db() as s:
+        bodies = [b.body_redacted for b in s.execute(select(MessageBody)).scalars()]
+    assert all(code not in b for b in bodies)

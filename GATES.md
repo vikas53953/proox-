@@ -21,3 +21,14 @@ The code enforces this: `desk/config.py` refuses any non-mock adapter at startup
 
 The NSE public adapter will be built and tested against saved sample files but stays
 **disabled** until the owner confirms usage/redistribution/AI-use terms for that data.
+
+## G02 verification checklist (must be ticked before any real WhatsApp send)
+
+Approved as provisional by the owner on 2026-10-01; each item is re-checked against the
+WhatsApp Business Platform / Cloud API documentation for **v26.0** when G02 is closed.
+
+- [ ] Error-code groups in `transport/whatsapp/client.py`: rate/throughput = 4, 80007, 130429, 131048, 131056; 24h-window (re-engagement) = 131047; everything else 4xx = permanent failure; 5xx / timeout = UNKNOWN.
+- [ ] `biz_opaque_callback_data` is accepted on text, template and media sends and is echoed back in status webhooks, so UNKNOWN sends can be reconciled (`outbox/receipts.py`).
+- [ ] Status webhook shape (`statuses[].id/status/timestamp/recipient_id/errors`) matches `transport/whatsapp/payload.py`.
+- [ ] Media upload (`/{phone_number_id}/media`) and document/image send payloads match `transport/whatsapp/client.py` (added in M4).
+- [ ] Template names, languages, categories and APPROVED status come from the real account, not the drafts in `config/whatsapp_templates.json`.

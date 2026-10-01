@@ -1,6 +1,6 @@
 MOCK — synthetic values, not market data
-RESEARCH | India pre-market | 01 Oct 2026
-As of 01 Oct 2026 09:12 IST | Report MOCK-2026-10-01-AUCTION v1 | DEGRADED
+RESEARCH | India pre-market | 01 Oct 2026 | As of 01 Oct 2026 09:12 IST | Report MOCK-2026-10-01-AUCTION v1
+Status: DEGRADED
 
 SESSION PATHS (conditional, not predictions):
 - BASE: Trade stays between VAL 25060 on NIFTY OCT FUT (MOCK) and VAH 25200 on NIFTY OCT FUT (MOCK) after 09:15. Invalidation: Sustained trade outside that value area on NIFTY OCT FUT (MOCK). Confidence: low.

@@ -31,4 +31,6 @@ NEUTRAL = (
     "Ye invite valid nahi hai ya expire ho gaya hai. Jisne invite bheja, unse naya invite maangiye."
 )
 
+NO_REPORT_TODAY = "Aaj ka report abhi tak nahi bana. Purana report aaj ka bata kar nahi bhejenge."
+
 PENDING_REASON = "model access aur market-data rights abhi decide nahi hue (G01, G03)"

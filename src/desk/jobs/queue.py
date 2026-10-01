@@ -27,6 +27,7 @@ class Lease:
     kind: str
     trading_date: date
     deadline_at: datetime
+    hard_stop_at: datetime
     budget_seconds: int
     attempts: int
     max_attempts: int
@@ -61,14 +62,15 @@ def lease_next(
         job.attempts += 1
         job.updated_at = now
         return Lease(
-            job.id,
-            job.lease_epoch,
-            job.kind,
-            job.trading_date,
-            job.deadline_at,
-            job.budget_seconds,
-            job.attempts,
-            job.max_attempts,
+            job_id=job.id,
+            epoch=job.lease_epoch,
+            kind=job.kind,
+            trading_date=job.trading_date,
+            deadline_at=job.deadline_at,
+            hard_stop_at=job.hard_stop_at,
+            budget_seconds=job.budget_seconds,
+            attempts=job.attempts,
+            max_attempts=job.max_attempts,
         )
 
 

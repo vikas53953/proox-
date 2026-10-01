@@ -16,10 +16,21 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from desk.config import WhatsAppSettings
-from desk.db.models import AgentBinding, Inbound, Invite, MessageBody, Outbox, Tenant
+from desk.db.models import (
+    AgentBinding,
+    Inbound,
+    Invite,
+    MessageBody,
+    Outbox,
+    StoredReport,
+    Tenant,
+)
+from desk.feedback import FEEDBACK_ACK, parse_feedback, record_feedback
 from desk.onboarding import messages as msgs
 from desk.onboarding.invites import find_code, hash_code, redact
-from desk.outbox.policy import release_waiting
+from desk.outbox.parts import text_parts
+from desk.outbox.policy import ist_today, release_waiting
+from desk.report.model import Report
 from desk.transport.whatsapp.payload import InboundMessage
 
 NEUTRAL_WINDOW = timedelta(hours=24)
@@ -118,6 +129,12 @@ def _try_bind(session: Session, msg: InboundMessage, now: datetime) -> Tenant | 
     return tenant
 
 
+def _only_greeting(text: str | None) -> bool:
+    """True for "Hi <code>" and similar: nothing to answer beyond the invite itself."""
+    rest = redact(text).replace("[invite code]", " ").strip(" ,.!").upper()
+    return rest == "" or rest in GREETINGS
+
+
 def _route(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime) -> str:
     if msg.provider_time > (tenant.last_inbound_at or msg.provider_time - timedelta(1)):
         tenant.last_inbound_at = msg.provider_time
@@ -126,8 +143,8 @@ def _route(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime)
         _queue(session, msg, tenant, "text_only", msgs.TEXT_ONLY, now)
         return "non_text"
     words = (msg.text or "").strip().upper()
-    if find_code(msg.text):
-        return "repeat_invite"  # already bound: no second welcome
+    if find_code(msg.text) and _only_greeting(msg.text):
+        return "repeat_invite"  # already bound: no second welcome, no reply
     if words == "STOP":
         tenant.opt_in_state = "stopped"
         _queue(session, msg, tenant, "stop", msgs.STOP, now)
@@ -136,6 +153,13 @@ def _route(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime)
         tenant.opt_in_state = "asked"
         _queue(session, msg, tenant, "start", msgs.START, now)
         return "start"
+    feedback = parse_feedback(msg.text)
+    if feedback is not None:
+        record_feedback(session, tenant, msg.message_id, feedback[0], feedback[1], now)
+        _queue(session, msg, tenant, "feedback_ack", FEEDBACK_ACK, now)
+        return f"feedback_{feedback[0]}"
+    if words == "TEXT":
+        return _send_text_version(session, msg, tenant, now)
     if tenant.opt_in_state == "asked" and words in YES_WORDS:
         tenant.opt_in_state = "yes"
         _queue(session, msg, tenant, "opt_in_yes", msgs.OPT_IN_YES, now)
@@ -149,6 +173,23 @@ def _route(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime)
         session, msg, tenant, "question_pending", msgs.QUESTION_PENDING.format(reason=reason), now
     )
     return "question_pending"
+
+
+def _send_text_version(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime) -> str:
+    """Reply TEXT -> today's full report as numbered text parts (accessible fallback)."""
+    latest = session.execute(
+        select(StoredReport)
+        .where(StoredReport.tenant_id == tenant.id, StoredReport.trading_date == ist_today(now))
+        .order_by(StoredReport.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if latest is None:
+        _queue(session, msg, tenant, "text_none", msgs.NO_REPORT_TODAY, now)
+        return "text_none"
+    report = Report.model_validate(latest.body)
+    for i, body in enumerate(text_parts(report), 1):
+        _queue(session, msg, tenant, "text_part", body, now, key=f"{msg.message_id}:text:p{i}")
+    return "text_version"
 
 
 def _neutral(session: Session, msg: InboundMessage, now: datetime) -> str:

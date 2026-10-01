@@ -49,4 +49,5 @@ passes on Python 3.13.15 + PostgreSQL 17.11.
 | Use | Font | Status |
 |---|---|---|
 | Mock PDFs only | ReportLab built-in Helvetica, visibly labelled `FONT: PLACEHOLDER` | owner-approved placeholder |
-| Real reports | Noto Sans / Noto Sans Devanagari | **BLOCKED** (asset revision/license/hash + shaping renderer, G04) |
+| Mock charts (PNG) | Matplotlib's bundled DejaVu Sans, visibly labelled `FONT: PLACEHOLDER` | builder choice, same rule as the PDF placeholder — confirm |
+| Real reports | Noto Sans / Noto Sans Devanagari | **BLOCKED** (asset revision/license/hash + shaping renderer, G04). `render_pdf` refuses non-mock reports; they go out as text parts. |

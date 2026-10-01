@@ -27,6 +27,9 @@ def main() -> None:
     rep.add_argument("--scenario", default="full_mock")
     rep.add_argument("--kind", default="MORNING", choices=[k.value for k in ReportKind])
     rep.add_argument("--date", default="2026-10-01")
+    rep.add_argument(
+        "--media-dir", default=None, help="also write the PDF, chart PNG and chart manifest here"
+    )
     inv = sub.add_parser("invite", help="create an invite (operator only)")
     inv.add_argument("--phone-number-id", required=True)
     inv.add_argument("--bound-sender", default=None)
@@ -46,7 +49,27 @@ def main() -> None:
         trading_date=day,
         kind=ReportKind(args.kind),
     )
-    print(f"NO REPORT: {result.reason}" if isinstance(result, NoReport) else render_text(result))
+    if isinstance(result, NoReport):
+        print(f"NO REPORT: {result.reason}")
+        return
+    print(render_text(result))
+    if args.media_dir:
+        _write_media(result, Path(args.media_dir))
+
+
+def _write_media(report, out: Path) -> None:
+    import json
+
+    from desk.render.charts import report_charts
+    from desk.render.pdf import render_pdf
+
+    out.mkdir(parents=True, exist_ok=True)
+    charts = report_charts(report)
+    stem = f"{report.id}-v{report.version}"
+    (out / f"{stem}.pdf").write_bytes(render_pdf(report, charts))
+    for c in charts:
+        (out / f"{stem}-{c.name}.png").write_bytes(c.png)
+        (out / f"{stem}-{c.name}.manifest.json").write_text(json.dumps(c.manifest, indent=2))
 
 
 def _invite(args: argparse.Namespace) -> None:

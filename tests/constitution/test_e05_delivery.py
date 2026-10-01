@@ -66,11 +66,13 @@ def test_report_is_queued_only_for_opted_in_tenants(db, mock_calendar):
 
 
 def test_every_part_is_self_labelled_and_fits_whatsapp(db, mock_calendar):
+    from desk.db.models import Media
+    from tests.media_helpers import pdf_text
+
     add_tenant(db, ALICE, "yes", ist(7, 0))
     produce_report(db, mock_calendar)
     parts = rows(db, kind="report_part")
-    n = len(parts)
-    assert n >= 3
+    assert len(parts) == 3  # summary text, full PDF, sector chart
     for i, p in enumerate(parts, 1):
         first_line = p.body.splitlines()[0]
         for must in (
@@ -78,17 +80,28 @@ def test_every_part_is_self_labelled_and_fits_whatsapp(db, mock_calendar):
             "MOCK-2026-10-01-MORNING v1",
             "01 Oct 2026",
             "as of 01 Oct 2026 08:45 IST",
-            f"part {i}/{n}",
+            f"part {i}/3",
         ):
             assert must in first_line, (i, must)
-        assert len(p.body) <= 4096 and p.part_no == i and p.part_total == n
-        assert p.payload_hash and p.proactive
-    first = parts[0].body
-    assert first.index("SESSION PATHS") < first.index("DATA GAPS")
-    assert "R01 Overnight news" not in first  # gaps come before the full report
-    joined = "\n".join(p.body for p in parts)
-    for lens in ("R01 ", "R08 ", "R15 "):
-        assert lens in joined
+        assert p.part_no == i and p.part_total == 3 and p.payload_hash and p.proactive
+    summary, pdf_part, chart_part = parts
+    assert summary.media_id is None and len(summary.body) <= 4096
+    assert summary.body.index("SESSION PATHS") < summary.body.index("DATA GAPS")
+    assert "R01 Overnight news" not in summary.body  # gaps first; full report follows
+    assert "Audio summary: UNAVAILABLE" in summary.body
+    with db() as s:
+        pdf = s.get(Media, pdf_part.media_id)
+        png = s.get(Media, chart_part.media_id)
+        assert (pdf.kind, pdf.mime, png.kind, png.mime) == (
+            "document",
+            "application/pdf",
+            "image",
+            "image/png",
+        )
+        assert len(pdf_part.body) <= 1024 and len(chart_part.body) <= 1024
+        text = pdf_text(pdf.content)
+    for lens in ("R01 Overnight news", "R08 Order flow", "R15 Data / quality summary"):
+        assert lens in text
 
 
 # ---- inside the window ------------------------------------------------------------------
@@ -102,7 +115,8 @@ def test_window_open_parts_are_accepted_then_receipts_move_forward_only(db, mock
     parts = rows(db, kind="report_part")
     assert stats.counts == {"ACCEPTED": len(parts)}
     assert all(r.state == "ACCEPTED" and r.provider_message_id for r in parts)
-    assert {g["type"] for g in graph.requests} == {"text"}
+    assert [g["type"] for g in graph.requests] == ["text", "document", "image"]
+    assert len(graph.uploads) == 2  # PDF + PNG uploaded first, then sent by media id
     assert [g["biz_opaque_callback_data"] for g in graph.requests] == [str(r.id) for r in parts]
 
     pid = parts[0].provider_message_id

@@ -15,6 +15,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -161,6 +162,71 @@ class Outbox(Base):
     last_status_at: Mapped[datetime | None] = mapped_column(UTC_TS)
     error: Mapped[str | None] = mapped_column(Text)
     wait_reason: Mapped[str | None] = mapped_column(Text)
+    media_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("media.id"))
+    expires_at: Mapped[datetime | None] = mapped_column(UTC_TS)  # e.g. addendum: 09:15 IST
+
+
+class Media(Base):
+    """Generated PDF / PNG, kept per tenant (blob store is G05; DB storage is scaffold-only).
+
+    The caption carries report id / version / date / as-of; `manifest` records exactly
+    which sourced inputs and renderer produced the file (D04)."""
+
+    __tablename__ = "media"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    report_id: Mapped[str] = mapped_column(String(64))
+    report_version: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16))  # "document" | "image"
+    mime: Mapped[str] = mapped_column(String(64))
+    filename: Mapped[str] = mapped_column(String(128))
+    sha256: Mapped[str] = mapped_column(String(64))
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    caption: Mapped[str] = mapped_column(Text)
+    manifest: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(UTC_TS)
+
+
+class Feedback(Base):
+    """Minimal feedback only: useful / not useful / free text. No journal (v1.3)."""
+
+    __tablename__ = "feedback"
+    __table_args__ = (
+        CheckConstraint("kind IN ('useful', 'not_useful', 'text')", name="feedback_kind"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    message_id: Mapped[str] = mapped_column(String(128), unique=True)
+    report_id: Mapped[str | None] = mapped_column(String(64))
+    report_version: Mapped[int | None] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16))
+    text_redacted: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTC_TS)
+
+
+class Correction(Base):
+    """A verified change to a delivered report. The original stays unchanged and
+    identifiable; the correction names claim, source and versions (J09, RC10)."""
+
+    __tablename__ = "corrections"
+    __table_args__ = (UniqueConstraint("report_id", "new_version", name="correction_version"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    report_id: Mapped[str] = mapped_column(String(64))
+    trading_date: Mapped[date] = mapped_column(Date)
+    from_version: Mapped[int] = mapped_column(Integer)
+    new_version: Mapped[int] = mapped_column(Integer)
+    original_hash: Mapped[str] = mapped_column(String(64))
+    lens: Mapped[str] = mapped_column(String(8))
+    previous_claim: Mapped[str] = mapped_column(Text)
+    corrected_claim: Mapped[str] = mapped_column(Text)
+    source_url: Mapped[str] = mapped_column(Text)
+    source_time: Mapped[datetime] = mapped_column(UTC_TS)
+    scenario_impact: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTC_TS)
 
 
 class DeliveryReceipt(Base):

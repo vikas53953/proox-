@@ -14,6 +14,7 @@ build time; they must be re-checked against v26.0 when G02 is closed.
 """
 
 import json
+import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -68,12 +69,32 @@ def template_payload(to: str, name: str, language: str, params: list[str], callb
     }
 
 
+CAPTION_MAX = 1024  # WhatsApp media caption limit (verify at G02)
+
+
+def media_payload(
+    to: str, kind: str, media_id: str, caption: str, filename: str, callback: str
+) -> dict:
+    body = {"id": media_id, "caption": caption[:CAPTION_MAX]}
+    if kind == "document":
+        body["filename"] = filename
+    return {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": kind,
+        kind: body,
+        "biz_opaque_callback_data": callback,
+    }
+
+
 class GraphClient:
     """Thin client. `http` is injected: a MockTransport while G02 is BLOCKED."""
 
     def __init__(self, http: httpx.Client, phone_number_id: str, access_token: str) -> None:
         self._http = http
         self._url = f"{GRAPH_BASE}/{GRAPH_API_VERSION}/{phone_number_id}/messages"
+        self._media_url = f"{GRAPH_BASE}/{GRAPH_API_VERSION}/{phone_number_id}/media"
         self._headers = {"Authorization": f"Bearer {access_token}"}
 
     def send(self, payload: dict) -> Outcome:
@@ -105,6 +126,29 @@ class GraphClient:
             return Outcome(SendResult.RETRY, detail=detail)
         return Outcome(SendResult.FAILED, detail=detail)
 
+    def upload(self, content: bytes, mime: str, filename: str) -> Outcome:
+        """Upload media first; returns its media id. Uploading twice only wastes an id —
+        no message is sent by an upload — so any unclear upload result is a safe RETRY."""
+        try:
+            r = self._http.post(
+                self._media_url,
+                headers=self._headers,
+                timeout=TIMEOUT,
+                data={"messaging_product": "whatsapp", "type": mime},
+                files={"file": (filename, content, mime)},
+            )
+        except httpx.TransportError as exc:
+            return Outcome(SendResult.RETRY, detail=f"upload: {type(exc).__name__}")
+        if r.status_code >= 500 or r.status_code == 429:
+            return Outcome(SendResult.RETRY, detail=f"upload HTTP {r.status_code}")
+        try:
+            body = r.json()
+        except json.JSONDecodeError:
+            return Outcome(SendResult.RETRY, detail="upload: unreadable response")
+        if r.status_code == 200 and body.get("id"):
+            return Outcome(SendResult.ACCEPTED, provider_message_id=str(body["id"]))
+        return Outcome(SendResult.FAILED, detail=f"upload rejected: {str(body)[:200]}")
+
 
 def make_client(settings) -> "GraphClient":
     """Only mock mode exists while G02 is BLOCKED: no request can reach graph.facebook.com."""
@@ -121,10 +165,16 @@ class FakeGraph:
 
     def __init__(self) -> None:
         self.requests: list[dict] = []
+        self.uploads: list[dict] = []
         self.script: list = []  # items: "ok" | int status | dict body | Exception
         self._n = 0
 
     def handler(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/media"):
+            self.uploads.append(
+                {"bytes": len(request.content), "type": request.headers.get("content-type", "")}
+            )
+            return httpx.Response(200, json={"id": f"media.MOCK{len(self.uploads)}"})
         payload = json.loads(request.content)
         self.requests.append(payload)
         step = self.script.pop(0) if self.script else "ok"
@@ -136,7 +186,7 @@ class FakeGraph:
                 200,
                 json={
                     "messaging_product": "whatsapp",
-                    "messages": [{"id": f"wamid.MOCK{self._n}"}],
+                    "messages": [{"id": f"wamid.MOCK{uuid.uuid4().hex[:16]}"}],
                 },
             )
         if isinstance(step, int):

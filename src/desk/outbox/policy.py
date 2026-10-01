@@ -20,6 +20,7 @@ from desk.transport.whatsapp.templates import Template, TemplateRegistry
 
 WINDOW = timedelta(hours=24)
 TEMPLATE_KIND = "template_report_ready"
+DATED_ANY_DAY = frozenset({"correction"})
 
 
 class Action(StrEnum):
@@ -48,6 +49,8 @@ def ist_today(now: datetime) -> date:
 def decide(
     session: Session, row: Outbox, tenant: Tenant | None, now: datetime, templates: TemplateRegistry
 ) -> Decision:
+    if row.expires_at is not None and now >= row.expires_at:
+        return Decision(Action.CANCEL, "expired: no longer useful after its time window")
     if not row.proactive:
         if tenant is not None:
             last = tenant.last_inbound_at
@@ -58,9 +61,13 @@ def decide(
             return Decision(Action.SEND_TEXT)
         return Decision(Action.CANCEL, "reply window (24h) has passed")
 
+    if row.expires_at is not None and now >= row.expires_at:
+        return Decision(Action.CANCEL, "expired: no longer useful after its time window")
     if tenant is None or not tenant.report_opt_in:
         return Decision(Action.CANCEL, "not opted in to daily updates (or STOP)")
-    if row.trading_date is not None and row.trading_date != ist_today(now):
+    if row.kind in DATED_ANY_DAY:
+        pass  # a correction names its own report date; it is never presented as today's
+    elif row.trading_date is not None and row.trading_date != ist_today(now):
         return Decision(
             Action.CANCEL,
             f"stale: for {row.trading_date}, today is {ist_today(now)}; never sent as today's",
