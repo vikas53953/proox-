@@ -118,10 +118,42 @@ def test_addendum_without_auction_data_says_what_is_unknown(db, mock_calendar):
 # ---- follow-up: TEXT version ----------------------------------------------------------------
 
 
-def test_text_command_returns_full_report_as_labelled_text_parts(db, mock_calendar, wa_settings):
+def test_text_alone_returns_the_section_list(db, mock_calendar, wa_settings):
     add_tenant(db, ALICE, "yes", ist(7, 0))
     morning(db, mock_calendar)
-    assert say(db, wa_settings, ALICE, "text", ist(8, 50)).handled_as == "text_version"
+    assert say(db, wa_settings, ALICE, "text", ist(8, 50)).handled_as == "text_index"
+    (index,) = rows(db, kind="text_index")
+    assert "TEXT index" in index.body.splitlines()[0]
+    assert "Reply TEXT R05" in index.body and "TEXT ALL" in index.body
+    for lens in ("R01 Overnight news", "R08 Order flow", "R15 Data / quality summary"):
+        assert lens in index.body
+
+
+def test_text_r05_returns_one_labelled_section(db, mock_calendar, wa_settings):
+    add_tenant(db, ALICE, "yes", ist(7, 0))
+    morning(db, mock_calendar)
+    assert say(db, wa_settings, ALICE, "TEXT R05", ist(8, 50)).handled_as == "text_R05"
+    (part,) = rows(db, kind="text_section")
+    first = part.body.splitlines()[0]
+    assert "MOCK-2026-10-01-MORNING v1" in first and first.endswith("TEXT R05")
+    assert "R05 Large-cap focus" in part.body and "R06" not in part.body
+    assert len(part.body) <= 4096
+
+
+def test_chart_text_version_lives_in_text_r04_not_the_caption(db, mock_calendar, wa_settings):
+    add_tenant(db, ALICE, "yes", ist(7, 0))
+    morning(db, mock_calendar)
+    chart = [p for p in rows(db, kind="report_part") if p.part_no == 3][0]
+    assert "Text version: reply TEXT R04" in chart.body and "up" not in chart.body.split()
+    say(db, wa_settings, ALICE, "TEXT R04", ist(8, 50))
+    (part,) = rows(db, kind="text_section")
+    assert "Chart in words:" in part.body and "Auto +1.05% up" in part.body
+
+
+def test_text_all_returns_full_report_as_labelled_text_parts(db, mock_calendar, wa_settings):
+    add_tenant(db, ALICE, "yes", ist(7, 0))
+    morning(db, mock_calendar)
+    assert say(db, wa_settings, ALICE, "TEXT ALL", ist(8, 50)).handled_as == "text_all"
     parts = rows(db, kind="text_part")
     n = len(parts)
     assert n >= 3 and not any(p.proactive for p in parts)

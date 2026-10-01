@@ -30,7 +30,7 @@ class MockModelAdapter:
     """Deterministic stand-in. Builds conditional paths purely from the reference levels
     in the envelope; it has no tools and cannot act on anything in the payload."""
 
-    name = "mock-model-v1"
+    name = "mock-model-v2"
     is_mock = True
 
     def complete(self, role: str, task: str, data: DataEnvelope) -> str:
@@ -50,20 +50,20 @@ class MockModelAdapter:
                 (
                     "BASE",
                     "Rotation inside prior value area",
-                    f"Trade stays between VAL {at('val')} and VAH {at('vah')} after 09:15",
-                    f"Sustained trade outside that value area on {lv['vah']['instrument']}",
+                    f"Trade holds between VAL {at('val')} and VAH {at('vah')} after 09:15",
+                    f"Sustained trade outside VAL-VAH on {lv['vah']['instrument']}",
                 ),
                 (
                     "UP",
                     "Upside acceptance",
                     f"Acceptance above VAH {at('vah')}, then above prior high {at('prior_high')}",
-                    f"Return inside value below VAH {at('vah')}",
+                    f"Back below VAH {at('vah')}",
                 ),
                 (
                     "DOWN",
                     "Downside acceptance",
                     f"Acceptance below VAL {at('val')}, then below prior low {at('prior_low')}",
-                    f"Return inside value above VAL {at('val')}",
+                    f"Back above VAL {at('val')}",
                 ),
             ]
         else:

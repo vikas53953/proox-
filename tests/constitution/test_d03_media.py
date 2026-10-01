@@ -170,14 +170,12 @@ def test_real_report_pdf_refused_while_font_is_blocked(mock_report):
 
 
 def test_pdf_and_summary_agree_on_paths_and_gaps(pdf_pages, mock_report):
-    """D02: the chat summary and the PDF state the same paths and gaps."""
+    """D02: the chat summary and the PDF state the same paths and gaps (same renderer)."""
     from desk.outbox.parts import delivery_plan
+    from desk.report.text import compact_paths, gap_lines
 
-    text = "\n".join(pdf_pages).replace("\n", " ")
+    text = " ".join(pdf_pages).replace("\n", " ")
     summary = delivery_plan(mock_report, mock_report.cutoff, mock_report.cutoff, [], b"x")[0]
-    for gap in mock_report.top_gaps:
-        assert gap[:60] in summary.body
-        assert gap[:60] in text
-    for s in mock_report.scenarios:
-        assert s.trigger in summary.body
-        assert s.trigger[:60] in text
+    for line in compact_paths(mock_report) + gap_lines(mock_report):
+        assert line in summary.body
+        assert line.removeprefix("- ")[:60] in text

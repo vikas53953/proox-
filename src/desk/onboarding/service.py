@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from desk.config import WhatsAppSettings
+from desk.core.lens import LensId
 from desk.db.models import (
     AgentBinding,
     Inbound,
@@ -28,8 +29,9 @@ from desk.db.models import (
 from desk.feedback import FEEDBACK_ACK, parse_feedback, record_feedback
 from desk.onboarding import messages as msgs
 from desk.onboarding.invites import find_code, hash_code, redact
-from desk.outbox.parts import text_parts
+from desk.outbox.parts import text_index, text_parts, text_section
 from desk.outbox.policy import ist_today, release_waiting
+from desk.render.charts import report_charts
 from desk.report.model import Report
 from desk.transport.whatsapp.payload import InboundMessage
 
@@ -158,8 +160,8 @@ def _route(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime)
         record_feedback(session, tenant, msg.message_id, feedback[0], feedback[1], now)
         _queue(session, msg, tenant, "feedback_ack", FEEDBACK_ACK, now)
         return f"feedback_{feedback[0]}"
-    if words == "TEXT":
-        return _send_text_version(session, msg, tenant, now)
+    if words == "TEXT" or words.startswith("TEXT "):
+        return _send_text_version(session, msg, tenant, now, words.removeprefix("TEXT").strip())
     if tenant.opt_in_state == "asked" and words in YES_WORDS:
         tenant.opt_in_state = "yes"
         _queue(session, msg, tenant, "opt_in_yes", msgs.OPT_IN_YES, now)
@@ -175,8 +177,11 @@ def _route(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime)
     return "question_pending"
 
 
-def _send_text_version(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime) -> str:
-    """Reply TEXT -> today's full report as numbered text parts (accessible fallback)."""
+def _send_text_version(
+    session: Session, msg: InboundMessage, tenant: Tenant, now: datetime, what: str
+) -> str:
+    """TEXT -> list of sections; TEXT R05 -> one section; TEXT ALL -> the whole report.
+    Today's report only: an older report is never offered as today's."""
     latest = session.execute(
         select(StoredReport)
         .where(StoredReport.tenant_id == tenant.id, StoredReport.trading_date == ist_today(now))
@@ -187,9 +192,21 @@ def _send_text_version(session: Session, msg: InboundMessage, tenant: Tenant, no
         _queue(session, msg, tenant, "text_none", msgs.NO_REPORT_TODAY, now)
         return "text_none"
     report = Report.model_validate(latest.body)
-    for i, body in enumerate(text_parts(report), 1):
-        _queue(session, msg, tenant, "text_part", body, now, key=f"{msg.message_id}:text:p{i}")
-    return "text_version"
+    if what == "":
+        _queue(session, msg, tenant, "text_index", text_index(report), now)
+        return "text_index"
+    charts = {c.manifest["lens"]: c.alt_text for c in report_charts(report)}
+    if what == "ALL":
+        for i, body in enumerate(text_parts(report, chart_texts=charts), 1):
+            _queue(session, msg, tenant, "text_part", body, now, key=f"{msg.message_id}:text:p{i}")
+        return "text_all"
+    try:
+        lens = LensId(what)
+    except ValueError:
+        _queue(session, msg, tenant, "text_index", text_index(report), now)
+        return "text_index"
+    _queue(session, msg, tenant, "text_section", text_section(report, lens, charts), now)
+    return f"text_{lens.value}"
 
 
 def _neutral(session: Session, msg: InboundMessage, now: datetime) -> str:

@@ -108,6 +108,11 @@ EMBED: dict[str, str] = {}  # media path -> data: URI (standalone export only)
 EXPAND = False  # standalone export shows every message in full (prints cleanly)
 
 
+def dl(name: str) -> str:
+    """download= only in the standalone file; the online viewer ignores download links."""
+    return f' download="{html.escape(name)}"' if EMBED else ""
+
+
 def src(path: str) -> str:
     return EMBED.get(path, path)
 
@@ -138,7 +143,7 @@ def bubble(ev: dict) -> str:
         name = media["file"].split("/")[-1]
         parts.append(
             f'<div class="doc"><span class="badge">PDF</span>'
-            f'<a href="{e(src(media["file"]))}" download="{e(name)}" target="_blank" '
+            f'<a href="{e(src(media["file"]))}"{dl(name)} target="_blank" '
             f'rel="noopener">{e(name)}</a></div>'
         )
     if len(text) > LONG and not EXPAND:

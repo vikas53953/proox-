@@ -33,6 +33,7 @@ from desk.market_calendar import fmt_ist
 from desk.render.charts import Chart
 from desk.render.palette import GREY, INK, NAVY, RULES, WARNING
 from desk.report.model import Report
+from desk.report.text import compact_paths, gap_lines
 
 PDF_VERSION = "pdf-a4-v1"
 FONT, FONT_BOLD = "Helvetica", "Helvetica-Bold"
@@ -220,22 +221,11 @@ def render_pdf(report: Report, charts: list[Chart]) -> bytes:
             )
         )
     story += [Paragraph("Session paths (conditional, not predictions)", s["h2"])]
-    for sc in report.scenarios:
-        story.append(
-            Paragraph(
-                _t(
-                    f"{sc.path}: {sc.trigger}. Invalidation: {sc.invalidation}. "
-                    f"Confidence: {sc.confidence}."
-                ),
-                s["body"],
-            )
-        )
+    story += [Paragraph(_t(line.removeprefix("- ")), s["body"]) for line in compact_paths(report)]
     for c in dict.fromkeys(c for sc in report.scenarios for c in sc.contrary_evidence):
         story.append(Paragraph(_t(f"Contrary evidence: {c}"), s["body"]))
     story += [Paragraph("Data gaps", s["h2"])]
-    story += [Paragraph(_t(g), s["body"]) for g in report.top_gaps] or [
-        Paragraph("None.", s["body"])
-    ]
+    story += [Paragraph(_t(g.removeprefix("- ")), s["body"]) for g in gap_lines(report)]
     story.append(
         Paragraph(
             _t(
