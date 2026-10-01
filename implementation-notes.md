@@ -11,3 +11,5 @@ One line per deviation from the approved plan: what changed and why.
 - 2026-10-01 M1: Value area now reports real price edges (VAL = bin lower edge, VAH = bin upper edge, POC = bin middle). Method version `VP-even-split-v1/VA70-single-row-v1/edges-v1`.
 - 2026-10-01 M1: R13 Greeks shown as UNAVAILABLE (feed has none; pricing-model assumptions are an owner choice), so R13 is DEGRADED on every mock run. Honest, by design.
 - 2026-10-01 M1: Golden-test tolerance is zero (exact Decimal match). Any change to a number = method change + version bump.
+- 2026-10-01 M1b: Official NSE CM 2026 holiday file added from owner-provided data (circular CMTR71775 + NSE holidays page). Weekdays verified. Special sessions (Muhurat 8 Nov, timing TBD) count as a trading day for "previous session" but get NO 08:45 report — conservative default, owner to confirm.
+- 2026-10-01: Work runs in a cloud container. It cannot edit files on the owner's PC or change host/OS-level settings (e.g. hosts file, firewall); the network allowlist changes only via the environment settings, and appears to need a fresh session to take effect.

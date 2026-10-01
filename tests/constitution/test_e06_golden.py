@@ -253,3 +253,56 @@ def test_calendar_rules(mock_calendar: TradingCalendar):
 
 def test_cutoff_is_0845_ist_stored_as_utc():
     assert morning_cutoff_utc(MOCK_DAY) == datetime(2026, 10, 1, 3, 15, tzinfo=UTC)
+
+
+# ---- official NSE 2026 calendar (owner-provided) ----------------------------------------
+
+
+@pytest.fixture(scope="module")
+def nse_2026(repo_root) -> TradingCalendar:
+    return TradingCalendar.load(repo_root / "fixtures/calendar/NSE-CM-holidays-2026-v1.json")
+
+
+def test_official_calendar_metadata(nse_2026):
+    assert not nse_2026.is_mock and nse_2026.version == "NSE-CM-2026-v1"
+    assert len(nse_2026.holidays) == 16
+    assert all(d.weekday() < 5 for d in nse_2026.holidays)
+
+
+@pytest.mark.parametrize(
+    "day", ["2026-01-15", "2026-03-03", "2026-10-02", "2026-11-10", "2026-12-25"]
+)
+def test_official_weekday_holidays_are_closed(nse_2026, day):
+    assert not nse_2026.is_trading_day(date.fromisoformat(day))
+
+
+def test_official_prev_session_skips_holidays_and_weekends(nse_2026):
+    assert previous_trading_day(nse_2026, date(2026, 10, 5)) == date(2026, 10, 1)
+    assert previous_trading_day(nse_2026, date(2026, 10, 21)) == date(2026, 10, 19)
+    assert previous_trading_day(nse_2026, date(2026, 1, 16)) == date(2026, 1, 14)
+
+
+def test_muhurat_session_counts_as_prior_session_but_gets_no_morning_report(nse_2026, build_report):
+    from desk.agents.model import MockModelAdapter
+    from desk.pipeline import NoReport, run_report
+
+    assert nse_2026.is_trading_day(date(2026, 11, 8))  # Sunday special session
+    assert previous_trading_day(nse_2026, date(2026, 11, 9)) == date(2026, 11, 8)
+    result = run_report(
+        calendar=nse_2026,
+        feed=feed("full_mock"),
+        model=MockModelAdapter(),
+        trading_date=date(2026, 11, 8),
+    )
+    assert isinstance(result, NoReport) and "special session" in result.reason
+
+
+def test_weekend_date_in_holiday_list_is_rejected(tmp_path):
+    bad = tmp_path / "cal.json"
+    bad.write_text(
+        '{"version":"x","segment":"x","source_url":"https://x","retrieved_at":'
+        '"2026-01-01T00:00:00+00:00","is_mock":true,"covers_from":"2026-01-01",'
+        '"covers_to":"2026-12-31","holidays":[{"date":"2026-08-15","description":"x"}]}'
+    )
+    with pytest.raises(ValueError, match="weekend"):
+        TradingCalendar.load(bad)

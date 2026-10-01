@@ -86,6 +86,12 @@ def run_report(
     try:
         if not calendar.is_trading_day(trading_date):
             return NoReport(trading_date, f"not a trading day per calendar {calendar.version}")
+        if calendar.is_special_session(trading_date):
+            # Owner decision pending: no 08:45 report on special sessions (e.g. Muhurat).
+            timing = calendar.special_sessions[trading_date]
+            return NoReport(
+                trading_date, f"special session (timing {timing}); morning report not scheduled"
+            )
         prev = previous_trading_day(calendar, trading_date)
     except CalendarNotCoveredError as exc:
         return NoReport(trading_date, f"calendar does not cover this date: {exc}")

@@ -34,11 +34,15 @@ class TradingCalendar:
     covers_from: date
     covers_to: date
     holidays: frozenset[date]
-    special_sessions: frozenset[date]
+    special_sessions: dict[date, str]  # date -> timing in IST, or "TBD"
 
     @classmethod
     def load(cls, path: Path) -> "TradingCalendar":
         raw = json.loads(path.read_text())
+        holidays = [date.fromisoformat(h["date"]) for h in raw["holidays"]]
+        weekend = [d for d in holidays if d.weekday() >= 5]
+        if weekend:
+            raise ValueError(f"weekday-holiday list contains weekend dates: {weekend}")
         return cls(
             version=raw["version"],
             segment=raw["segment"],
@@ -47,11 +51,15 @@ class TradingCalendar:
             is_mock=bool(raw["is_mock"]),
             covers_from=date.fromisoformat(raw["covers_from"]),
             covers_to=date.fromisoformat(raw["covers_to"]),
-            holidays=frozenset(date.fromisoformat(h["date"]) for h in raw["holidays"]),
-            special_sessions=frozenset(
-                date.fromisoformat(s["date"]) for s in raw.get("special_sessions", [])
-            ),
+            holidays=frozenset(holidays),
+            special_sessions={
+                date.fromisoformat(s["date"]): s.get("timing_ist", "TBD")
+                for s in raw.get("special_sessions", [])
+            },
         )
+
+    def is_special_session(self, day: date) -> bool:
+        return day in self.special_sessions
 
     def is_trading_day(self, day: date) -> bool:
         if not self.covers_from <= day <= self.covers_to:

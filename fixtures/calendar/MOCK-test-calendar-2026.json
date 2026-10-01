@@ -12,6 +12,6 @@
     {"date": "2026-10-20", "description": "MOCK holiday"}
   ],
   "special_sessions": [
-    {"date": "2026-10-25", "description": "MOCK special Sunday session"}
+    {"date": "2026-10-25", "description": "MOCK special Sunday session", "timing_ist": "18:00-19:00"}
   ]
 }

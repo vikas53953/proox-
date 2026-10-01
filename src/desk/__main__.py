@@ -27,7 +27,7 @@ def main() -> None:
     args = parser.parse_args()
 
     day = date.fromisoformat(args.date)
-    calendar = TradingCalendar.load(FIXTURES / "calendar" / "MOCK-test-calendar-2026.json")
+    calendar = TradingCalendar.load(FIXTURES / "calendar" / "NSE-CM-holidays-2026-v1.json")
     result = run_report(
         calendar=calendar,
         feed=FixtureFeed(FIXTURES / "market", date(2026, 10, 1), args.scenario),
