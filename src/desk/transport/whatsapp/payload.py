@@ -26,6 +26,7 @@ class InboundMessage:
     provider_time: datetime
     type: str
     text: str | None
+    channel: str = "whatsapp"
 
 
 @dataclass(frozen=True)

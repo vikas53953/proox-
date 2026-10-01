@@ -10,6 +10,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     CheckConstraint,
     Date,
     DateTime,
@@ -42,6 +43,7 @@ class Invite(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
     bound_sender: Mapped[str | None] = mapped_column(String(20), index=True)
+    channel: Mapped[str] = mapped_column(String(16), default="whatsapp", server_default="whatsapp")
     business_phone_id: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(UTC_TS)
     expires_at: Mapped[datetime] = mapped_column(UTC_TS)
@@ -53,7 +55,7 @@ class Invite(Base):
 class Tenant(Base):
     __tablename__ = "tenants"
     __table_args__ = (
-        UniqueConstraint("business_phone_id", "sender", name="tenant_identity"),
+        UniqueConstraint("channel", "business_phone_id", "sender", name="tenant_identity"),
         CheckConstraint(
             "opt_in_state IN ('unasked', 'asked', 'yes', 'no', 'stopped')",
             name="tenant_opt_in_state",
@@ -62,8 +64,10 @@ class Tenant(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # channel + business endpoint (WhatsApp phone_number_id / Telegram bot id) + sender id
+    channel: Mapped[str] = mapped_column(String(16), default="whatsapp", server_default="whatsapp")
     business_phone_id: Mapped[str] = mapped_column(String(32))
-    sender: Mapped[str] = mapped_column(String(20))  # WhatsApp wa_id from transport only
+    sender: Mapped[str] = mapped_column(String(20))  # transport identity only (wa_id / tg id)
     language: Mapped[str] = mapped_column(String(32), default="hinglish-roman")
     opt_in_state: Mapped[str] = mapped_column(String(16), default="unasked")
     state: Mapped[str] = mapped_column(String(16), default="pending")
@@ -99,6 +103,7 @@ class Inbound(Base):
     __tablename__ = "inbound_messages"
 
     message_id: Mapped[str] = mapped_column(String(128), primary_key=True)  # dedupe key
+    channel: Mapped[str] = mapped_column(String(16), default="whatsapp", server_default="whatsapp")
     business_phone_id: Mapped[str] = mapped_column(String(32))
     sender: Mapped[str] = mapped_column(String(20), index=True)
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), index=True)
@@ -141,6 +146,7 @@ class Outbox(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     idempotency_key: Mapped[str] = mapped_column(String(200), unique=True)
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), index=True)
+    channel: Mapped[str] = mapped_column(String(16), default="whatsapp", server_default="whatsapp")
     business_phone_id: Mapped[str] = mapped_column(String(32))
     recipient: Mapped[str] = mapped_column(String(20), index=True)
     kind: Mapped[str] = mapped_column(String(32))
@@ -227,6 +233,17 @@ class Correction(Base):
     scenario_impact: Mapped[str] = mapped_column(Text)
     reason: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTC_TS)
+
+
+class TransportCursor(Base):
+    """Long-polling position per channel/bot (Telegram getUpdates offset)."""
+
+    __tablename__ = "transport_cursors"
+
+    channel: Mapped[str] = mapped_column(String(16), primary_key=True)
+    business_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    last_update_id: Mapped[int] = mapped_column(BigInteger, default=0)
+    updated_at: Mapped[datetime] = mapped_column(UTC_TS)
 
 
 class DeliveryReceipt(Base):

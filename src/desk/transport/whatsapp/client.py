@@ -15,32 +15,16 @@ build time; they must be re-checked against v26.0 when G02 is closed.
 
 import json
 import uuid
-from dataclasses import dataclass
-from enum import StrEnum
 
 import httpx
 
 from desk.config import GRAPH_API_VERSION
+from desk.transport.base import Outcome, SendResult
 
 GRAPH_BASE = "https://graph.facebook.com"
 RETRY_CODES = frozenset({"4", "80007", "130429", "131048", "131056"})  # rate / throughput
 WINDOW_CODES = frozenset({"131047"})  # re-engagement: outside 24h window
 TIMEOUT = httpx.Timeout(10.0, connect=5.0)
-
-
-class SendResult(StrEnum):
-    ACCEPTED = "ACCEPTED"
-    RETRY = "RETRY"
-    WINDOW_CLOSED = "WINDOW_CLOSED"
-    FAILED = "FAILED"
-    UNKNOWN = "UNKNOWN"
-
-
-@dataclass(frozen=True)
-class Outcome:
-    result: SendResult
-    provider_message_id: str | None = None
-    detail: str = ""
 
 
 def text_payload(to: str, body: str, callback: str) -> dict:

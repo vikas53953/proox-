@@ -9,6 +9,9 @@ import os
 from dataclasses import dataclass, field
 
 ALLOWED_MODES = frozenset({"mock"})
+# Telegram Bot API version this code was checked against (RC12 pin, see BOM.md).
+# None = not yet pinned: live Telegram refuses to start until the owner records it.
+TELEGRAM_BOT_API_VERSION: str | None = None
 GRAPH_API_VERSION = "v26.0"  # pinned in Technical spec v1.3; not configurable
 
 
@@ -30,6 +33,32 @@ class WhatsAppSettings:
     def webhook_ready(self) -> bool:
         return all((self.phone_number_id, self.waba_id, self.app_secret, self.verify_token))
 
+    def accepts(self, msg) -> bool:
+        """Only our own WhatsApp business number / account."""
+        return (
+            getattr(msg, "channel", "whatsapp") == "whatsapp"
+            and msg.phone_number_id == self.phone_number_id
+            and msg.waba_id == self.waba_id
+        )
+
+
+@dataclass(frozen=True)
+class TelegramSettings:
+    """Owner-approved TEST transport. Token: env var on the owner's PC until the G05
+    secret store exists; never in code, chat, logs or commits."""
+
+    bot_token: str = field(default="", repr=False)
+    bot_username: str = ""
+    live: bool = False  # DESK_TELEGRAM_LIVE=1: real api.telegram.org (owner PC only)
+
+    @property
+    def bot_id(self) -> str:
+        head = self.bot_token.split(":", 1)[0]
+        return head if head.isdigit() else "0"
+
+    def accepts(self, msg) -> bool:
+        return getattr(msg, "channel", "") == "telegram" and msg.phone_number_id == self.bot_id
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -38,6 +67,7 @@ class Settings:
     model_adapter: str
     feed_adapter: str
     whatsapp: WhatsAppSettings = field(default_factory=WhatsAppSettings)
+    telegram: TelegramSettings = field(default_factory=TelegramSettings)
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
@@ -65,5 +95,10 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
             app_secret=env.get("WHATSAPP_APP_SECRET", ""),
             verify_token=env.get("WHATSAPP_VERIFY_TOKEN", ""),
             access_token=env.get("WHATSAPP_ACCESS_TOKEN", ""),
+        ),
+        telegram=TelegramSettings(
+            bot_token=env.get("TELEGRAM_BOT_TOKEN", ""),
+            bot_username=env.get("TELEGRAM_BOT_USERNAME", ""),
+            live=env.get("DESK_TELEGRAM_LIVE", "") == "1",
         ),
     )

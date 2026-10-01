@@ -31,6 +31,9 @@ def redact(text: str | None) -> str:
     return CODE_RE.sub("[invite code]", text or "")
 
 
+TELEGRAM_MAX_TTL = timedelta(hours=24)  # owner rule: deep links are forwardable
+
+
 def create_invite(
     session: Session,
     *,
@@ -39,13 +42,20 @@ def create_invite(
     ttl: timedelta,
     bound_sender: str | None = None,
     with_code: bool = True,
+    channel: str = "whatsapp",
 ) -> tuple[Invite, str | None]:
     """Create an invite. Returns the plain code ONCE; only its hash is stored.
 
-    with_code=False + bound_sender = "preapproved sender": that number can just say Hi.
+    WhatsApp: with_code=False + bound_sender = "preapproved sender" (Hi is enough).
+    Telegram: always a single-use code, at most 24 hours; the person's Telegram id is
+    unknown before first contact, so no pre-binding (required before other users).
     """
     if not with_code and not bound_sender:
         raise ValueError("an invite needs a code, a bound sender, or both")
+    if channel == "telegram":
+        if not with_code:
+            raise ValueError("Telegram invites always need a code (deep link)")
+        ttl = min(ttl, TELEGRAM_MAX_TTL)
     code = new_code() if with_code else None
     invite = Invite(
         token_hash=hash_code(code) if code else None,
@@ -54,7 +64,13 @@ def create_invite(
         created_at=now,
         expires_at=now + ttl,
         state="open",
+        channel=channel,
     )
     session.add(invite)
     session.flush()
     return invite, code
+
+
+def telegram_deep_link(bot_username: str, code: str) -> str:
+    """t.me link whose start parameter is the invite code (<=64 chars, A-Z0-9_-)."""
+    return f"https://t.me/{bot_username}?start={code}"

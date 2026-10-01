@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from desk.config import WhatsAppSettings
+from desk.config import TelegramSettings, WhatsAppSettings
 from desk.core.lens import LensId
 from desk.db.models import (
     AgentBinding,
@@ -38,7 +38,7 @@ from desk.transport.whatsapp.payload import InboundMessage
 NEUTRAL_WINDOW = timedelta(hours=24)
 YES_WORDS = {"YES", "Y", "HAAN", "HA", "HAN"}
 NO_WORDS = {"NO", "N", "NAHI", "NAHIN"}
-GREETINGS = {"HI", "HII", "HELLO", "HEY", "NAMASTE"}
+GREETINGS = {"HI", "HII", "HELLO", "HEY", "NAMASTE", "/START"}  # /start = Telegram deep link
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,7 @@ def _queue(
             id=uuid.uuid4(),
             idempotency_key=key or f"{msg.message_id}:{kind}",
             tenant_id=tenant.id if tenant else None,
+            channel=msg.channel,
             business_phone_id=msg.phone_number_id,
             recipient=msg.sender,
             kind=kind,
@@ -77,7 +78,9 @@ def _queue(
 def _find_tenant(session: Session, msg: InboundMessage) -> Tenant | None:
     return session.execute(
         select(Tenant).where(
-            Tenant.business_phone_id == msg.phone_number_id, Tenant.sender == msg.sender
+            Tenant.channel == msg.channel,
+            Tenant.business_phone_id == msg.phone_number_id,
+            Tenant.sender == msg.sender,
         )
     ).scalar_one_or_none()
 
@@ -88,6 +91,7 @@ def _try_bind(session: Session, msg: InboundMessage, now: datetime) -> Tenant | 
         Invite.state == "open",
         Invite.expires_at > now,
         Invite.business_phone_id == msg.phone_number_id,
+        Invite.channel == msg.channel,
     ]
     if code:
         conds += [
@@ -103,6 +107,7 @@ def _try_bind(session: Session, msg: InboundMessage, now: datetime) -> Tenant | 
         return None
     tenant = Tenant(
         id=uuid.uuid4(),
+        channel=msg.channel,
         business_phone_id=msg.phone_number_id,
         sender=msg.sender,
         opt_in_state="asked",
@@ -147,6 +152,7 @@ def _route(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime)
     words = (msg.text or "").strip().upper()
     if find_code(msg.text) and _only_greeting(msg.text):
         return "repeat_invite"  # already bound: no second welcome, no reply
+    words = {"/STOP": "STOP", "/START": "START"}.get(words, words)  # Telegram commands
     if words == "STOP":
         tenant.opt_in_state = "stopped"
         _queue(session, msg, tenant, "stop", msgs.STOP, now)
@@ -228,21 +234,25 @@ def _neutral(session: Session, msg: InboundMessage, now: datetime) -> str:
         "neutral",
         msgs.NEUTRAL,
         now,
-        key=f"neutral:{msg.phone_number_id}:{msg.sender}:{now:%Y-%m-%d}",
+        key=f"neutral:{msg.channel}:{msg.phone_number_id}:{msg.sender}:{now:%Y-%m-%d}",
     )
     return "not_bound"
 
 
 def handle_message(
-    session: Session, wa: WhatsAppSettings, msg: InboundMessage, now: datetime
+    session: Session,
+    wa: WhatsAppSettings | TelegramSettings,
+    msg: InboundMessage,
+    now: datetime,
 ) -> Outcome:
     """Process one message. The caller owns the transaction (commit / rollback)."""
-    if msg.phone_number_id != wa.phone_number_id or msg.waba_id != wa.waba_id:
+    if not wa.accepts(msg):  # our own WhatsApp number / Telegram bot only
         return Outcome("ignored_wrong_business_number")
     fresh = session.execute(
         pg_insert(Inbound)
         .values(
             message_id=msg.message_id,
+            channel=msg.channel,
             business_phone_id=msg.phone_number_id,
             sender=msg.sender,
             provider_time=msg.provider_time,
