@@ -229,6 +229,7 @@ def run(out: Path, factory) -> None:
     d.note(at(1, 9, 10), f"Worker: {work(at(1, 9, 10), good)}")
     d.flush(at(1, 9, 11))
     d.say(at(1, 9, 20), VIKAS, "TEXT")
+    d.say(at(1, 9, 22), VIKAS, "TEXT R05")
     d.say(at(1, 9, 30), VIKAS, "useful")
     d.say(at(1, 9, 31), VIKAS, "Feedback: R13 Greeks samajh aaye, R08 short rakho")
     with factory() as s:

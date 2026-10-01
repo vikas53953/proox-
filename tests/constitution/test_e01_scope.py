@@ -77,6 +77,7 @@ FORBIDDEN_IMPORTS = {
 }
 FORBIDDEN_ROUTE_WORDS = ("order", "trade", "broker", "position", "portfolio", "login")
 
+DATA_URI = re.compile(r"data:[\w/+.-]+;base64,[A-Za-z0-9+/=]+")
 SECRET_PATTERNS = [
     re.compile(r"EAA[A-Za-z0-9]{40,}"),  # Meta/Graph access token shape
     re.compile(r"sk-[A-Za-z0-9_-]{20,}"),  # generic provider API key shape
@@ -229,7 +230,9 @@ def test_no_secrets_in_tracked_files(repo_root):
         path = repo_root / rel
         if not path.is_file() or path.suffix in {".png", ".pdf", ".lock"}:
             continue
-        text = path.read_text(errors="ignore")
+        # Embedded base64 media (data: URIs) can match token shapes by chance; drop only
+        # those blobs, the rest of the file is still scanned.
+        text = DATA_URI.sub("data:", path.read_text(errors="ignore"))
         for pattern in SECRET_PATTERNS:
             assert not pattern.search(text), f"possible secret in {rel}"
 
@@ -280,3 +283,13 @@ def test_migrations_downgrade_and_upgrade_cleanly(pg_url):
         with admin.connect() as conn:
             conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
         admin.dispose()
+
+
+def test_secret_scan_still_sees_tokens_next_to_embedded_media():
+    token = "EAA" + "B" * 50
+    page = f'<img src="data:image/png;base64,EAA{"x" * 60}"> token={token}'
+    cleaned = DATA_URI.sub("data:", page)
+    assert any(p.search(cleaned) for p in SECRET_PATTERNS)
+    assert not any(
+        p.search(DATA_URI.sub("data:", page.replace(token, ""))) for p in SECRET_PATTERNS
+    )

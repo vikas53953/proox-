@@ -103,6 +103,7 @@ def sector_returns_chart(report: Report) -> Chart | None:
     session = facts[0].as_of
     return _hbar(
         report,
+        "R04",
         "sector_returns",
         facts,
         title="Sector returns, prior session",
@@ -114,6 +115,7 @@ def sector_returns_chart(report: Report) -> Chart | None:
 
 def _hbar(
     report: Report,
+    lens: str,
     name: str,
     facts: list[Fact],
     *,
@@ -216,6 +218,8 @@ def _hbar(
     ]
     manifest = {
         "chart": name,
+        "title": title,
+        "lens": lens,
         "chart_version": CHART_VERSION,
         "renderer": f"matplotlib {matplotlib.__version__}",
         "font": FONT_NOTE,

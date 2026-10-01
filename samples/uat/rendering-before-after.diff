@@ -1,0 +1,98 @@
+# Rendering fixes: before / after (MOCK report 01 Oct 2026). Data model unchanged.
+
+## 1. Summary message (part 1): paths + data gaps
+@@ -3,14 +3,15 @@
+ Status: DEGRADED
+ 
+ SESSION PATHS (conditional, not predictions):
+-- BASE: Trade stays between VAL 25060 on NIFTY OCT FUT (MOCK) and VAH 25200 on NIFTY OCT FUT (MOCK) after 09:15. Invalidation: Sustained trade outside that value area on NIFTY OCT FUT (MOCK). Confidence: low.
+-- UP: Acceptance above VAH 25200 on NIFTY OCT FUT (MOCK), then above prior high 25180 on NIFTY 50 (MOCK). Invalidation: Return inside value below VAH 25200 on NIFTY OCT FUT (MOCK). Confidence: low.
+-- DOWN: Acceptance below VAL 25060 on NIFTY OCT FUT (MOCK), then below prior low 24960 on NIFTY 50 (MOCK). Invalidation: Return inside value above VAL 25060 on NIFTY OCT FUT (MOCK). Confidence: low.
++Levels on NIFTY OCT FUT (MOCK) unless marked.
++- BASE: Trade holds between VAL 25060 and VAH 25200 after 09:15. Invalid if: sustained trade outside VAL-VAH. Confidence: low.
++- UP: Acceptance above VAH 25200, then above prior high 25180 [NIFTY 50 (MOCK)]. Invalid if: back below VAH 25200. Confidence: low.
++- DOWN: Acceptance below VAL 25060, then below prior low 24960 [NIFTY 50 (MOCK)]. Invalid if: back above VAL 25060. Confidence: low.
+ - Contrary evidence: CONTRADICTION on MOCKBANK_A: positive per o1; negative per o2
+ 
+ DATA GAPS:
+-- UNAVAILABLE: gift_nifty: not available under current feed rights (GIFT Nifty not licensed in current feed (G03)) (affects R02, R12)
+-- UNAVAILABLE: no sourced margin-financing data in current feed (affects R10)
++- GIFT Nifty: unavailable. Not licensed in current feed, gate G03. Affects R02, R12.
++- Margin financing: unavailable. No sourced margin-financing data in current feed. Affects R10.
+ Audio summary: UNAVAILABLE (voice not decided, G04).
+ 
+-Full R01-R15 report: part 2 (PDF). Text version: reply TEXT.
++Full R01-R15 report: part 2 (PDF). Text in chat: reply TEXT for the list of sections.
+
+## 2. Chart caption (part 3): text version moved to TEXT R04
+@@ -1,2 +1,2 @@
+ MOCK | MOCK-2026-10-01-MORNING v1 | 01 Oct 2026 | as of 01 Oct 2026 08:45 IST | part 3/3
+-Chart (MOCK): Sector returns, prior session, %. IT −0.35% down, Energy +0.10% up, Banks +0.82% up, Auto +1.05% up. Source: MOCK feed: sectors (https://example.invalid/mock/sectors). As of 30 Sep 2026 15:30 IST.
++Sector returns, prior session (chart). Text version: reply TEXT R04.
+
+## 3. R04 in the full text: 16 identical tags -> one provenance line
+--- before (first 4 of 16 lines)
+R04 Sector map — COMPLETE
+- Auto return: 1.05 % [PRIOR SESSION] — NIFTY AUTO (sector index); MOCK feed: sectors, as of 30 Sep 2026 15:30 IST
+- Auto vs Nifty 50: 0.57 % points [DERIVED] — NIFTY AUTO (sector index); MOCK feed: sectors, as of 30 Sep 2026 15:30 IST
+
+=====
++++ after
+R04 Sector map — COMPLETE
+16 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: sectors
+- Auto return: 1.05 % — NIFTY AUTO (sector index)
+- Auto vs Nifty 50: 0.57 % points [DERIVED] — NIFTY AUTO (sector index)
+- Auto breadth (adv/dec): 11/4 count — NIFTY AUTO (sector index)
+- Auto weight in Nifty 50: 7.30 % — NIFTY AUTO (sector index)
+  ...
+
+## 4. Reply to TEXT: before = all 9 parts; after = this index
+MOCK | MOCK-2026-10-01-MORNING v1 | 01 Oct 2026 | as of 01 Oct 2026 08:45 IST | TEXT index
+Reply TEXT R05 (any section) for one section, or TEXT ALL for everything.
+
+R01 Overnight news — COMPLETE
+R02 US / Asia / global futures — DEGRADED
+R03 Oil / macro — COMPLETE
+R04 Sector map — COMPLETE
+R05 Large-cap focus — COMPLETE
+R06 Price action — COMPLETE
+R07 Liquidity / depth — COMPLETE
+R08 Order flow — COMPLETE
+R09 OI / F&O — COMPLETE
+R10 Funding / flows — DEGRADED
+R11 Sentiment — COMPLETE
+R12 Auction market theory (AMT) — DEGRADED
+R13 Options lens — COMPLETE
+R14 Conditional outlook — COMPLETE
+R15 Data / quality summary — DEGRADED
+
+## 5. Reply to TEXT R05 (one section)
+MOCK | MOCK-2026-10-01-MORNING v1 | 01 Oct 2026 | as of 01 Oct 2026 08:45 IST | TEXT R05
+R05 Large-cap focus — COMPLETE
+4 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: stocks | MOCKBANK_A
+- MOCKBANK_A prior close: 1650.00 INR
+- MOCKBANK_A prior high: 1662.00 INR
+- MOCKBANK_A prior low: 1631.50 INR
+- MOCKBANK_A Nifty weight: 12.50 %
+- MOCKBANK_A catalyst (business update): Q2 business update filed text [OVERNIGHT] — MOCKBANK_A; MOCK Exchange filing, as of 30 Sep 2026 19:00 IST
+4 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: stocks | MOCKOIL_C
+- MOCKOIL_C prior close: 1420.00 INR
+- MOCKOIL_C prior high: 1431.00 INR
+- MOCKOIL_C prior low: 1405.00 INR
+- MOCKOIL_C Nifty weight: 9.40 %
+- MOCKOIL_C catalyst (operations): Refinery unit maintenance shutdown text [OVERNIGHT] — MOCKOIL_C; MOCK Company press release, as of 01 Oct 2026 07:10 IST
+4 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: stocks | MOCKIT_B
+- MOCKIT_B prior close: 3560.00 INR
+- MOCKIT_B prior high: 3590.00 INR
+- MOCKIT_B prior low: 3541.00 INR
+- MOCKIT_B Nifty weight: 8.10 %
+- MOCKIT_B catalyst (analyst note): Demand view reiterated text [OVERNIGHT] — MOCKIT_B; MOCK Broker research note, as of 01 Oct 2026 06:30 IST
+- Note: MOCKBANK_A: shortlisted — 1 catalyst(s), weight 12.50%. Invalidation reference: prior low 1631.50 / prior high 1662.00 (reference levels, not targets).
+- Note: MOCKOIL_C: shortlisted — 1 catalyst(s), weight 9.40%. Invalidation reference: prior low 1405.00 / prior high 1431.00 (reference levels, not targets).
+- Note: MOCKIT_B: shortlisted — 1 catalyst(s), weight 8.10%. Invalidation reference: prior low 3541.00 / prior high 3590.00 (reference levels, not targets).
+- Note: Scanned 6 names; 3 shortlisted (capacity 5); 3 without material catalyst.
+
+## 6. Reply to TEXT R04 (chart in words lives here now)
+- IT weight in Nifty 50: 12.40 % — NIFTY IT (sector index)
+- GAP today's sector returns: NOT APPLICABLE — Cash market opens 09:15 IST; no intraday sector returns exist yet
+- Chart in words: Chart (MOCK): Sector returns, prior session, %. IT −0.35% down, Energy +0.10% up, Banks +0.82% up, Auto +1.05% up. Source: MOCK feed: sectors (https://example.invalid/mock/sectors). As of 30 Sep 2026 15:30 IST.

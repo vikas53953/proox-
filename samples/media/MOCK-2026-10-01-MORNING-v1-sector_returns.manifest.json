@@ -1,11 +1,13 @@
 {
   "chart": "sector_returns",
+  "title": "Sector returns, prior session",
+  "lens": "R04",
   "chart_version": "chart-hbar-v1",
   "renderer": "matplotlib 3.11.2",
   "font": "FONT: PLACEHOLDER (Matplotlib DejaVu Sans; Noto BLOCKED)",
   "report_id": "MOCK-2026-10-01-MORNING",
   "report_version": 1,
-  "report_hash": "898c12512af2aae45625e4027de311ab7866f5e26d8694be2f6aa5d9766ecbdf",
+  "report_hash": "11106b823c7052f4206c45e6e977ff9c9a86f8862d03ddc856063daf9393f54b",
   "inputs": [
     {
       "label": "IT return",
