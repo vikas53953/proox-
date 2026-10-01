@@ -9,6 +9,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `README.md` | One-page intro, how to run tests and print a mock report |
 | `BOM.md` | The exact versions we are allowed to use, and which are blocked |
 | `GATES.md` | The six open owner decisions (G01–G06) and the mock used meanwhile |
+| `PC-SESSION-CHECKLIST.md` | What to do on the owner's PC: pinned stack, Telegram Bot API pin, bot token, first live send |
 | `BACKLOG.md` | Approved later items found during the build (B01 Muhurat report, B02 encrypt numbers — launch blocker) |
 | `implementation-notes.md` | Log of every deviation from the plan, one line each, with the reason |
 | `pyproject.toml` | Project settings: exact pins, test and lint settings |
