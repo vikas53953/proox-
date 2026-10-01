@@ -19,6 +19,7 @@ from desk.config import WhatsAppSettings
 from desk.db.models import AgentBinding, Inbound, Invite, MessageBody, Outbox, Tenant
 from desk.onboarding import messages as msgs
 from desk.onboarding.invites import find_code, hash_code, redact
+from desk.outbox.policy import release_waiting
 from desk.transport.whatsapp.payload import InboundMessage
 
 NEUTRAL_WINDOW = timedelta(hours=24)
@@ -120,6 +121,7 @@ def _try_bind(session: Session, msg: InboundMessage, now: datetime) -> Tenant | 
 def _route(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime) -> str:
     if msg.provider_time > (tenant.last_inbound_at or msg.provider_time - timedelta(1)):
         tenant.last_inbound_at = msg.provider_time
+    release_waiting(session, tenant.id, now)  # window is open again
     if msg.type != "text":
         _queue(session, msg, tenant, "text_only", msgs.TEXT_ONLY, now)
         return "non_text"

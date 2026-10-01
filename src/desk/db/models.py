@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -107,10 +108,34 @@ class Inbound(Base):
     handled_as: Mapped[str] = mapped_column(String(32), default="received")
 
 
+OUTBOX_STATES = (
+    "PENDING",
+    "SENDING",
+    "ACCEPTED",
+    "SENT",
+    "DELIVERED",
+    "READ",
+    "FAILED",
+    "UNKNOWN",
+    "WAITING_WINDOW",
+    "CANCELLED",
+)
+
+
 class Outbox(Base):
-    """Messages waiting to be sent. M3 adds sending, receipts and delivery states."""
+    """Every outbound message, its delivery state and why it is in that state (RC10/RC11).
+
+    ACCEPTED = Graph API took it (has provider id); SENT/DELIVERED/READ/FAILED come only
+    from receipts; UNKNOWN = we may have sent it but never got an answer (never resent
+    blindly); WAITING_WINDOW = not allowed to send yet (24h window / template rules).
+    """
 
     __tablename__ = "outbox"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN (" + ", ".join(f"'{x}'" for x in OUTBOX_STATES) + ")", name="outbox_state"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     idempotency_key: Mapped[str] = mapped_column(String(200), unique=True)
@@ -122,6 +147,81 @@ class Outbox(Base):
     state: Mapped[str] = mapped_column(String(16), default="PENDING")
     created_at: Mapped[datetime] = mapped_column(UTC_TS)
     in_reply_to: Mapped[str | None] = mapped_column(String(128))
+    proactive: Mapped[bool] = mapped_column(default=False, server_default=false())  # opt-in rules
+    report_id: Mapped[str | None] = mapped_column(String(64))
+    report_version: Mapped[int | None] = mapped_column(Integer)
+    trading_date: Mapped[date | None] = mapped_column(Date)
+    part_no: Mapped[int | None] = mapped_column(Integer)
+    part_total: Mapped[int | None] = mapped_column(Integer)
+    payload_hash: Mapped[str | None] = mapped_column(String(64))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    next_attempt_at: Mapped[datetime | None] = mapped_column(UTC_TS)
+    claimed_at: Mapped[datetime | None] = mapped_column(UTC_TS)
+    provider_message_id: Mapped[str | None] = mapped_column(String(128), unique=True)
+    last_status_at: Mapped[datetime | None] = mapped_column(UTC_TS)
+    error: Mapped[str | None] = mapped_column(Text)
+    wait_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class DeliveryReceipt(Base):
+    """Every status webhook we receive, kept as evidence (duplicates collapse)."""
+
+    __tablename__ = "delivery_receipts"
+    __table_args__ = (UniqueConstraint("provider_message_id", "status", name="receipt_once"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    outbox_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("outbox.id"), index=True)
+    provider_message_id: Mapped[str] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(16))
+    provider_time: Mapped[datetime] = mapped_column(UTC_TS)
+    received_at: Mapped[datetime] = mapped_column(UTC_TS)
+    error_code: Mapped[str | None] = mapped_column(String(16))
+    error_title: Mapped[str | None] = mapped_column(Text)
+
+
+JOB_STATES = ("PENDING", "LEASED", "DONE", "FAILED", "CANCELLED", "SKIPPED")
+
+
+class Job(Base):
+    """A dated unit of work with a durable lease (RC10).
+
+    Fencing: every lease bumps lease_epoch; a worker may only finish the job with the
+    epoch it leased, so a stale worker (lease expired, job cancelled) can never write.
+    """
+
+    __tablename__ = "jobs"
+    __table_args__ = (
+        UniqueConstraint(
+            "kind",
+            "trading_date",
+            "tenant_id",
+            name="job_once_per_day",
+            postgresql_nulls_not_distinct=True,
+        ),
+        CheckConstraint(
+            "state IN (" + ", ".join(f"'{x}'" for x in JOB_STATES) + ")", name="job_state"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    kind: Mapped[str] = mapped_column(String(32))
+    trading_date: Mapped[date] = mapped_column(Date)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"))
+    not_before: Mapped[datetime] = mapped_column(UTC_TS)
+    deadline_at: Mapped[datetime] = mapped_column(UTC_TS)  # target, e.g. 08:45 IST
+    hard_stop_at: Mapped[datetime] = mapped_column(UTC_TS)  # after this: give up, say so
+    state: Mapped[str] = mapped_column(String(16), default="PENDING")
+    lease_owner: Mapped[str | None] = mapped_column(String(64))
+    lease_until: Mapped[datetime | None] = mapped_column(UTC_TS)
+    lease_epoch: Mapped[int] = mapped_column(Integer, default=0)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    budget_seconds: Mapped[int] = mapped_column(Integer, default=600)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(UTC_TS)
+    result: Mapped[dict | None] = mapped_column(JSON)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTC_TS)
+    updated_at: Mapped[datetime] = mapped_column(UTC_TS)
 
 
 class StoredReport(Base):

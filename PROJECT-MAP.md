@@ -1,6 +1,6 @@
 # Project map
 
-Plain-words role of every folder and key file. Refreshed each milestone (last: M2).
+Plain-words role of every folder and key file. Refreshed each milestone (last: M3).
 
 ## Top level
 
@@ -9,11 +9,13 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `README.md` | One-page intro, how to run tests and print a mock report |
 | `BOM.md` | The exact versions we are allowed to use, and which are blocked |
 | `GATES.md` | The six open owner decisions (G01–G06) and the mock used meanwhile |
+| `BACKLOG.md` | Approved later items found during the build (B01 Muhurat report, B02 encrypt numbers — launch blocker) |
 | `implementation-notes.md` | Log of every deviation from the plan, one line each, with the reason |
 | `pyproject.toml` | Project settings: exact pins, test and lint settings |
 | `requirements*.in` / `requirements*.lock` | Pinned direct packages / every package with checksums |
 | `.env.example` | Setting names with empty placeholders — never real secrets |
-| `alembic.ini`, `alembic/` | Database schema changes (migrations). `versions/0001_initial_schema.py` creates all M2 tables |
+| `alembic.ini`, `alembic/` | Database schema changes. `0001` = M2 tables; `0002` = jobs, delivery states, receipts |
+| `config/whatsapp_templates.json` | Template drafts from the design doc — status DRAFT, not submitted (G02) |
 | `samples/` | Text output of mock reports, so you can read one without running anything |
 
 ## `src/desk/` — the program
@@ -23,11 +25,21 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `__main__.py` | `python -m desk report ...` prints a MOCK report; `python -m desk invite ...` creates an invite (operator only, code shown once) |
 | `config.py` | Reads settings; refuses any real adapter while gates are blocked |
 | `app.py` | Web front door: WhatsApp webhook + health check, nothing else |
+| `jobs/scheduler.py` | Writes one dated job per day (07:30 start, 08:45 target, 09:15 hard stop); holidays get a SKIPPED row with the reason |
+| `jobs/queue.py` | Hands a job to one worker at a time; a numbered "lease" stops an old worker from publishing |
+| `jobs/worker.py` | Runs one job: build report → in one go mark DONE + save + queue parts; on failure retry, then tell users plainly |
+| `outbox/parts.py` | Cuts a report into numbered WhatsApp parts; every part repeats id, version, date, as-of, part i/n |
+| `outbox/notices.py` | Queues report parts and the "no report today" notice (fixed wording, no internal errors) |
+| `outbox/policy.py` | Right before sending: opted in? today's report? inside 24h window? approved template? else wait/cancel |
+| `outbox/sender.py` | Sends queued messages; a send with no clear answer becomes UNKNOWN and is never resent blindly |
+| `outbox/receipts.py` | Meta's delivery receipts → SENT / DELIVERED / READ / FAILED, only ever forward |
 | `tenancy.py` | The only way to read a tenant's data; another tenant's row looks exactly like "not found" |
 | `db/models.py` | Database tables: invites, tenants, agent bindings, inbound messages, outbox, reports |
 | `db/session.py` | Opens the database connection (PostgreSQL via psycopg only) |
 | `transport/whatsapp/signature.py` | Checks Meta's signature on every incoming webhook (secret-based fingerprint) |
 | `transport/whatsapp/payload.py` | Reads the incoming WhatsApp message; sender = transport id, never the display name |
+| `transport/whatsapp/client.py` | Talks to the WhatsApp send API; only the in-memory fake exists while G02 is blocked |
+| `transport/whatsapp/templates.py` | List of message templates and their Meta status; only APPROVED ones may be used |
 | `transport/whatsapp/webhook.py` | The webhook itself: size limit → signature → parse → one transaction per message |
 | `onboarding/invites.py` | Makes invite codes; stores only their fingerprint (hash); hides codes in stored text |
 | `onboarding/service.py` | One message in: dedupe → existing tenant? reply : try invite → welcome + opt-in question |
@@ -78,6 +90,9 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `test_e02_onboarding.py` | Signed webhook → exactly one tenant + one welcome; replays, races, bad/expired/forwarded invites leak nothing |
 | `test_e03_report.py` | All 15 lenses; every fact sourced; missing data shown as missing, never as a number |
 | `test_e04_isolation.py` | Tenants can't see each other; injected text can't trigger tools; secrets never shown |
+| `test_e05_delivery.py` | Report → parts → accepted/delivered/read/failed/UNKNOWN; 24h window and template rules; stale never sent |
 | `test_e06_golden.py` | Maths gives the hand-checked answers; no peeking ahead; contradictions caught; no certainty words |
 
 | `tests/whatsapp_helpers.py` | Builds signed fake WhatsApp webhooks for tests |
+| `tests/constitution/test_e07_failures.py` | Worker crash, stale lease, feed/DB/budget failure, late and missed-deadline cases are all visible, never silent |
+| `tests/delivery_helpers.py` | Fake clock, quick tenants and worker setup for delivery tests |

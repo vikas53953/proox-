@@ -252,3 +252,31 @@ def test_migrations_match_models(migrated):
     with migrated.connect() as conn:
         diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
     assert diff == []
+
+
+def test_migrations_downgrade_and_upgrade_cleanly(pg_url):
+    """Every migration can be undone and re-applied on a fresh database."""
+    import os
+    import uuid as _uuid
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, text
+
+    admin_url = os.environ["DESK_TEST_DATABASE_URL"]
+    name = f"desk_rt_{_uuid.uuid4().hex[:8]}"
+    admin = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        conn.execute(text(f'CREATE DATABASE "{name}"'))
+    try:
+        repo = Path(__file__).resolve().parents[2]
+        cfg = Config(str(repo / "alembic.ini"))
+        cfg.set_main_option("script_location", str(repo / "alembic"))
+        cfg.attributes["url"] = admin_url.rsplit("/", 1)[0] + f"/{name}"
+        command.upgrade(cfg, "head")
+        command.downgrade(cfg, "base")
+        command.upgrade(cfg, "head")
+    finally:
+        with admin.connect() as conn:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+        admin.dispose()

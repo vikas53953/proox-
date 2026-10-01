@@ -14,7 +14,14 @@ from sqlalchemy.exc import IntegrityError
 from starlette.concurrency import run_in_threadpool
 
 from desk.onboarding.service import handle_message
-from desk.transport.whatsapp.payload import MAX_BODY_BYTES, PayloadError, parse_messages
+from desk.outbox.receipts import apply_status
+from desk.transport.whatsapp.payload import (
+    MAX_BODY_BYTES,
+    PayloadError,
+    business_ids,
+    parse_messages,
+    parse_statuses,
+)
 from desk.transport.whatsapp.signature import signature_valid, verify_token_valid
 
 router = APIRouter()
@@ -32,8 +39,12 @@ def verify(request: Request) -> Response:
     return Response(status_code=403)
 
 
-def _process(app_state, messages, now: datetime) -> None:
+def _process(app_state, messages, now: datetime, statuses=()) -> None:
     wa = app_state.settings.whatsapp
+    for st in statuses:
+        with app_state.session_factory() as session:
+            apply_status(session, st, now)
+            session.commit()
     for msg in messages:
         for attempt in range(2):  # one retry if a concurrent bind raced us
             with app_state.session_factory() as session:
@@ -62,8 +73,11 @@ async def receive(request: Request) -> Response:
     if not signature_valid(wa.app_secret, raw, request.headers.get("x-hub-signature-256")):
         return Response(status_code=401)
     try:
-        messages = parse_messages(json.loads(raw))
-    except (ValueError, KeyError, TypeError, PayloadError):
+        doc = json.loads(raw)
+        messages, statuses = parse_messages(doc), parse_statuses(doc)
+    except (ValueError, KeyError, TypeError, AttributeError, PayloadError):
         return Response(status_code=400)
-    await run_in_threadpool(_process, state, messages, datetime.now(UTC))
+    if business_ids(doc) - {(wa.waba_id, wa.phone_number_id)}:
+        return Response(status_code=200)  # another business number: acknowledge, ignore
+    await run_in_threadpool(_process, state, messages, datetime.now(UTC), statuses)
     return Response(status_code=200)
