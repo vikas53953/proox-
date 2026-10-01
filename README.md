@@ -14,3 +14,14 @@ pip install --require-hashes -r requirements-dev.lock
 pytest tests/constitution
 ruff check . && ruff format --check .
 ```
+
+## Print a MOCK report
+
+```bash
+PYTHONPATH=src python -m desk report --scenario full_mock
+PYTHONPATH=src python -m desk report --scenario no_orderflow_rights
+PYTHONPATH=src python -m desk report --scenario auction_mock --kind AUCTION
+PYTHONPATH=src python -m desk report --date 2026-10-02   # MOCK holiday -> no report
+```
+
+Pre-rendered copies are in `samples/`.

@@ -1,0 +1,36 @@
+{
+  "kind": "flows",
+  "source": {
+    "id": "mock-flows",
+    "name": "MOCK feed: flows",
+    "url": "https://example.invalid/mock/flows",
+    "is_mock": true
+  },
+  "as_of": "2026-09-30T19:30:00+05:30",
+  "records": [
+    {
+      "label": "FII/FPI net cash",
+      "instrument": "NSE+BSE cash (MOCK)",
+      "value": "-1250.40",
+      "unit": "INR crore",
+      "provisional": true
+    },
+    {
+      "label": "DII net cash",
+      "instrument": "NSE+BSE cash (MOCK)",
+      "value": "1630.10",
+      "unit": "INR crore",
+      "provisional": true
+    },
+    {
+      "label": "RBI net liquidity position",
+      "instrument": "Banking system (MOCK)",
+      "value": "120000",
+      "unit": "INR crore",
+      "provisional": false
+    }
+  ],
+  "meta": {
+    "margin_financing_sourced": false
+  }
+}

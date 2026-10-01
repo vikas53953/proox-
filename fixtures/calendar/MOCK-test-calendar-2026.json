@@ -1,0 +1,17 @@
+{
+  "version": "MOCK-2026.1",
+  "segment": "CM (MOCK)",
+  "source_url": "https://example.invalid/mock-calendar",
+  "retrieved_at": "2026-10-01T00:00:00+00:00",
+  "is_mock": true,
+  "note": "TEST FALLBACK ONLY. Synthetic holidays. Not NSE's list. Never used for a real report.",
+  "covers_from": "2026-09-01",
+  "covers_to": "2026-10-31",
+  "holidays": [
+    {"date": "2026-10-02", "description": "MOCK holiday"},
+    {"date": "2026-10-20", "description": "MOCK holiday"}
+  ],
+  "special_sessions": [
+    {"date": "2026-10-25", "description": "MOCK special Sunday session"}
+  ]
+}

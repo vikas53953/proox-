@@ -1,0 +1,39 @@
+{
+  "kind": "trades",
+  "source": {
+    "id": "mock-trades",
+    "name": "MOCK feed: trades",
+    "url": "https://example.invalid/mock/trades",
+    "is_mock": true
+  },
+  "as_of": "2026-09-30T15:30:00+05:30",
+  "records": [
+    {
+      "price": "25160",
+      "qty": "50"
+    },
+    {
+      "price": "25160.5",
+      "qty": "75"
+    },
+    {
+      "price": "25161",
+      "qty": "25"
+    },
+    {
+      "price": "25160",
+      "qty": "100"
+    },
+    {
+      "price": "25160",
+      "qty": "40"
+    },
+    {
+      "price": "25162",
+      "qty": "60"
+    }
+  ],
+  "meta": {
+    "instrument": "NIFTY OCT FUT (MOCK)"
+  }
+}

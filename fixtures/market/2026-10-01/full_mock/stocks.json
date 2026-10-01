@@ -1,0 +1,93 @@
+{
+  "kind": "stocks",
+  "source": {
+    "id": "mock-stocks",
+    "name": "MOCK feed: stocks",
+    "url": "https://example.invalid/mock/stocks",
+    "is_mock": true
+  },
+  "as_of": "2026-09-30T15:30:00+05:30",
+  "records": [
+    {
+      "symbol": "MOCKBANK_A",
+      "sector": "Banks",
+      "weight_pct": "12.50",
+      "prev_close": "1650.00",
+      "prev_high": "1662.00",
+      "prev_low": "1631.50",
+      "catalysts": [
+        {
+          "id": "c1",
+          "type": "business update",
+          "headline": "Q2 business update filed",
+          "origin": "MOCK Exchange filing",
+          "url": "https://example.invalid/mock/cat/c1",
+          "published_at": "2026-09-30T19:00:00+05:30"
+        }
+      ]
+    },
+    {
+      "symbol": "MOCKOIL_C",
+      "sector": "Energy",
+      "weight_pct": "9.40",
+      "prev_close": "1420.00",
+      "prev_high": "1431.00",
+      "prev_low": "1405.00",
+      "catalysts": [
+        {
+          "id": "c2",
+          "type": "operations",
+          "headline": "Refinery unit maintenance shutdown",
+          "origin": "MOCK Company press release",
+          "url": "https://example.invalid/mock/cat/c2",
+          "published_at": "2026-10-01T07:10:00+05:30"
+        }
+      ]
+    },
+    {
+      "symbol": "MOCKIT_B",
+      "sector": "IT",
+      "weight_pct": "8.10",
+      "prev_close": "3560.00",
+      "prev_high": "3590.00",
+      "prev_low": "3541.00",
+      "catalysts": [
+        {
+          "id": "c3",
+          "type": "analyst note",
+          "headline": "Demand view reiterated",
+          "origin": "MOCK Broker research note",
+          "url": "https://example.invalid/mock/cat/c3",
+          "published_at": "2026-10-01T06:30:00+05:30"
+        }
+      ]
+    },
+    {
+      "symbol": "MOCKAUTO_D",
+      "sector": "Auto",
+      "weight_pct": "3.20",
+      "prev_close": "12400.00",
+      "prev_high": "12480.00",
+      "prev_low": "12310.00",
+      "catalysts": []
+    },
+    {
+      "symbol": "MOCKFMCG_E",
+      "sector": "FMCG",
+      "weight_pct": "4.00",
+      "prev_close": "2480.00",
+      "prev_high": "2495.00",
+      "prev_low": "2462.00",
+      "catalysts": []
+    },
+    {
+      "symbol": "MOCKPHARMA_F",
+      "sector": "Pharma",
+      "weight_pct": "2.10",
+      "prev_close": "1780.00",
+      "prev_high": "1792.00",
+      "prev_low": "1770.00",
+      "catalysts": []
+    }
+  ]
+}

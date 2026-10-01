@@ -1,0 +1,22 @@
+{
+  "kind": "depth",
+  "source": {
+    "id": "mock-depth",
+    "name": "MOCK feed: depth",
+    "url": "https://example.invalid/mock/depth",
+    "is_mock": true
+  },
+  "as_of": "2026-09-30T15:30:00+05:30",
+  "records": [
+    {
+      "instrument": "MOCKBANK_A",
+      "median_spread_bps": "1.2",
+      "median_l1_qty": "850"
+    },
+    {
+      "instrument": "MOCKOIL_C",
+      "median_spread_bps": "1.8",
+      "median_l1_qty": "620"
+    }
+  ]
+}

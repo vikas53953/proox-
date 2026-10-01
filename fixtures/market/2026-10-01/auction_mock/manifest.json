@@ -1,0 +1,5 @@
+{
+  "is_mock": true,
+  "note": "MOCK. Adds indicative pre-open data for the 09:12 addendum.",
+  "base": "full_mock"
+}

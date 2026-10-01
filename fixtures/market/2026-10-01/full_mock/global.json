@@ -1,0 +1,45 @@
+{
+  "kind": "global",
+  "source": {
+    "id": "mock-global",
+    "name": "MOCK feed: global",
+    "url": "https://example.invalid/mock/global",
+    "is_mock": true
+  },
+  "as_of": "2026-10-01T08:40:00+05:30",
+  "records": [
+    {
+      "instrument": "S&P 500 (MOCK)",
+      "contract": "cash index",
+      "venue": "US",
+      "session_status": "closed",
+      "last": "6510.20",
+      "prev_close": "6480.00",
+      "unit": "points",
+      "as_of": "2026-10-01T01:30:00+05:30",
+      "delay_min": 0
+    },
+    {
+      "instrument": "Nasdaq 100 (MOCK)",
+      "contract": "cash index",
+      "venue": "US",
+      "session_status": "closed",
+      "last": "23850.00",
+      "prev_close": "23900.00",
+      "unit": "points",
+      "as_of": "2026-10-01T01:30:00+05:30",
+      "delay_min": 0
+    },
+    {
+      "instrument": "Nikkei 225 (MOCK)",
+      "contract": "cash index",
+      "venue": "JP",
+      "session_status": "open",
+      "last": "44120.00",
+      "prev_close": "44000.00",
+      "unit": "points",
+      "as_of": "2026-10-01T08:40:00+05:30",
+      "delay_min": 15
+    }
+  ]
+}
