@@ -14,6 +14,12 @@ TODAY_NA = Gap(
     reason="cash market opens 09:15 IST; no intraday sector returns exist yet",
 )
 
+NO_WEIGHTS = Gap(
+    topic="sector weights",
+    data_class=DataClass.UNAVAILABLE,
+    reason="Nifty 50 weight per sector is not in the current feed's sector data",
+)
+
 
 def build(ctx: LensContext) -> LensResult:
     ds = ctx.ds(DatasetKind.SECTORS)
@@ -45,9 +51,20 @@ def build(ctx: LensContext) -> LensResult:
                 cls,
                 note=why,
             ),
-            mk_fact(
-                ds, f"{r['sector']} weight in Nifty 50", dec(r["weight_pct"]), "%", s, cls, note=why
-            ),
         ]
+        if r.get("weight_pct") is not None:  # a feed without weights shows a gap instead
+            facts.append(
+                mk_fact(
+                    ds,
+                    f"{r['sector']} weight in Nifty 50",
+                    dec(r["weight_pct"]),
+                    "%",
+                    s,
+                    cls,
+                    note=why,
+                )
+            )
     gaps = [TODAY_NA] + ([stale_gap(DatasetKind.SECTORS, why)] if why else [])
+    if any(r.get("weight_pct") is None for r in ds.records):
+        gaps.append(NO_WEIGHTS)
     return LensResult(lens=LensId.R04, facts=tuple(facts), gaps=tuple(gaps))

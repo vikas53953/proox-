@@ -1,0 +1,15 @@
+{
+  "_comment": "SHAPE SAMPLE, hand-made, not downloaded from NSE, values fictional",
+  "timestamp": "30-Sep-2026 15:30:00",
+  "advances": 31,
+  "declines": 18,
+  "unchanged": 1,
+  "data": [
+    {"key": "BROAD MARKET INDICES", "index": "NIFTY 50", "indexSymbol": "NIFTY 50", "last": 25120.35, "variation": 120.00, "percentChange": 0.48, "open": 25000.35, "high": 25120.35, "low": 25000.35, "previousClose": 25000.35, "yearHigh": 0, "yearLow": 0, "pe": "0", "pb": "0", "dy": "0", "declines": "18", "advances": "31", "unchanged": "1"},
+    {"key": "BROAD MARKET INDICES", "index": "NIFTY NEXT 50", "indexSymbol": "NIFTY NEXT 50", "last": 68010.00, "variation": 110.00, "percentChange": 0.16, "open": 67900.00, "high": 68010.00, "low": 67900.00, "previousClose": 67900.00, "yearHigh": 0, "yearLow": 0, "pe": "0", "pb": "0", "dy": "0", "declines": "22", "advances": "28", "unchanged": "0"},
+    {"key": "SECTORAL INDICES", "index": "NIFTY AUTO", "indexSymbol": "NIFTY AUTO", "last": 24950.20, "variation": 259.25, "percentChange": 1.05, "open": 24690.95, "high": 24950.20, "low": 24690.95, "previousClose": 24690.95, "yearHigh": 0, "yearLow": 0, "pe": "0", "pb": "0", "dy": "0", "declines": "4", "advances": "11", "unchanged": "0"},
+    {"key": "SECTORAL INDICES", "index": "NIFTY BANK", "indexSymbol": "NIFTY BANK", "last": 55420.10, "variation": 450.75, "percentChange": 0.82, "open": 54969.35, "high": 55420.10, "low": 54969.35, "previousClose": 54969.35, "yearHigh": 0, "yearLow": 0, "pe": "0", "pb": "0", "dy": "0", "declines": "3", "advances": "9", "unchanged": "0"},
+    {"key": "SECTORAL INDICES", "index": "NIFTY ENERGY", "indexSymbol": "NIFTY ENERGY", "last": 36010.50, "variation": 36.00, "percentChange": 0.10, "open": 35974.50, "high": 36010.50, "low": 35974.50, "previousClose": 35974.50, "yearHigh": 0, "yearLow": 0, "pe": "0", "pb": "0", "dy": "0", "declines": "4", "advances": "4", "unchanged": "2"},
+    {"key": "SECTORAL INDICES", "index": "NIFTY IT", "indexSymbol": "NIFTY IT", "last": 35880.00, "variation": -126.00, "percentChange": -0.35, "open": 36006.00, "high": 36006.00, "low": 35880.00, "previousClose": 36006.00, "yearHigh": 0, "yearLow": 0, "pe": "0", "pb": "0", "dy": "0", "declines": "7", "advances": "3", "unchanged": "0"}
+  ]
+}
