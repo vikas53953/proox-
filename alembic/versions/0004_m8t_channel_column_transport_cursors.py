@@ -45,6 +45,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Without the channel column, Telegram rows would look like WhatsApp rows (older code
+    # would even hand queued Telegram messages to the WhatsApp client). Refuse instead.
+    bind = op.get_bind()
+    for table in ("tenants", "invites", "outbox", "inbound_messages"):
+        found = bind.execute(
+            sa.text(f"SELECT 1 FROM {table} WHERE channel <> 'whatsapp' LIMIT 1")  # noqa: S608
+        ).first()
+        if found:
+            raise RuntimeError(
+                f"cannot downgrade 0004: {table} has non-WhatsApp rows; remove them first"
+            )
     op.drop_constraint("tenant_identity", "tenants", type_="unique")
     op.create_unique_constraint(
         op.f("tenant_identity"),

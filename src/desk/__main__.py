@@ -131,7 +131,7 @@ def _serve(args: argparse.Namespace) -> None:
     from desk.agents.model import MockModelAdapter
     from desk.config import TelegramSettings
     from desk.jobs.worker import Deps
-    from desk.runner import describe, run_cycle, serve_loop
+    from desk.runner import PollBackoff, describe, run_cycle, serve_loop
     from desk.transport.telegram.client import (
         TelegramFatalError,
         TelegramPollError,
@@ -167,6 +167,8 @@ def _serve(args: argparse.Namespace) -> None:
         else TelegramSettings(bot_token=f"{tg_transport.endpoint}:MOCK")
     )
 
+    backoff = PollBackoff()
+
     def cycle():
         return run_cycle(
             factory,
@@ -177,13 +179,21 @@ def _serve(args: argparse.Namespace) -> None:
             telegram=(tg_client, tg_settings),
             auction_enabled=args.auction,
             poll_timeout_s=0 if args.once else min(args.interval, 25),
+            poll_backoff=backoff,
         )
 
     def log(line: str) -> None:
         print(f"{datetime.now(UTC):%H:%M:%S}Z {line}", flush=True)
 
     try:
-        serve_loop(cycle, log=log, sleep=time.sleep, max_cycles=1 if args.once else None)
+        serve_loop(
+            cycle,
+            log=log,
+            sleep=time.sleep,
+            # live: the long poll itself waits for messages; fake: getUpdates returns at once
+            pause_s=1 if settings.telegram.live else args.interval,
+            max_cycles=1 if args.once else None,
+        )
     except TelegramFatalError as exc:
         raise SystemExit(f"stopping: {describe(exc)}") from None
 

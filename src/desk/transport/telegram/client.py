@@ -23,7 +23,12 @@ class TelegramPollError(RuntimeError):
 
 
 class TelegramTransientError(TelegramPollError):
-    """Network trouble, 5xx, 429 or an unreadable answer: back off and try again."""
+    """Network trouble, 5xx, 429 or an unreadable answer: back off and try again.
+    `retry_after_s` carries Telegram's own wait (429 `parameters.retry_after`) when given."""
+
+    def __init__(self, message: str, retry_after_s: int | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_s = retry_after_s
 
 
 class TelegramFatalError(TelegramPollError):
@@ -44,7 +49,11 @@ def _api_error(method: str, r: httpx.Response) -> TelegramPollError:
         return TelegramFatalError(
             f"{method}: 409 another getUpdates poller or a webhook is active for this bot"
         )
-    return TelegramTransientError(f"{method}: {code} {desc}".rstrip())
+    retry = None
+    if code == 429 and isinstance(body, dict):
+        raw = (body.get("parameters") or {}).get("retry_after")
+        retry = int(raw) if isinstance(raw, int | str) and str(raw).isdigit() else None
+    return TelegramTransientError(f"{method}: {code} {desc}".rstrip(), retry_after_s=retry)
 
 
 class TelegramClient:
