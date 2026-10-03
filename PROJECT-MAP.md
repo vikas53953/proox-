@@ -13,21 +13,21 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `AUTOMATION.md` | How the @claude GitHub Action is used, its guardrails, and the owner-approval rule for merges |
 | `.github/workflows/claude.yml` | The GitHub Action itself (inactive until merged into `main`) |
 | `.github/workflows/ci.yml` | CI: full tests on Python 3.13.15 + PostgreSQL 17.11, plus ruff, on every PR and on `main` |
-| `BACKLOG.md` | Approved later items found during the build (B01 Muhurat report, B02 encrypt numbers — built behind a flag, launch blocker until G05 key store, B06 key rotation) |
+| `BACKLOG.md` | Approved later items found during the build (B01 Muhurat report, B02 encrypt numbers — built behind a flag, launch blocker until G05 key store, B06 key rotation — CLI built) |
 | `implementation-notes.md` | Log of every deviation from the plan, one line each, with the reason |
 | `pyproject.toml` | Project settings: exact pins, test and lint settings |
 | `requirements*.in` / `requirements*.lock` | Pinned direct packages / every package with checksums |
 | `.env.example` | Setting names with empty placeholders — never real secrets |
 | `alembic.ini`, `alembic/` | Database schema changes. `0001` = M2 tables; `0002` = jobs, delivery states, receipts; `0003` = media, feedback, corrections; `0004` = channel column, Telegram cursors; `0005` = B02 wider transport-id columns (downgrade refuses while any value is encrypted) |
 | `config/whatsapp_templates.json` | Template drafts from the design doc — status DRAFT, not submitted (G02) |
-| `uat/` | D07 run: `mock_days.py` plays 3 mock days end to end; `render_html.py` makes the chat page you review; `samples/uat/` holds the forwardable HTML + PDF |
+| `uat/` | D07 run: `mock_days.py` plays 3 mock days end to end; `render_html.py` makes the chat page you review (B05: very long bubbles may split across printed pages, label repeated); `samples/uat/` holds the forwardable HTML + PDF |
 | `samples/` | Mock reports as text, plus `samples/media/`: the PDF, the chart PNG and its manifest — open them directly |
 
 ## `src/desk/` — the program
 
 | Path | What it does |
 |---|---|
-| `__main__.py` | `python -m desk report ...` prints a MOCK report; `python -m desk invite ...` creates an invite (operator only, code shown once); `python -m desk senders status|encrypt` checks / encrypts stored transport ids (B02, operator only) |
+| `__main__.py` | `python -m desk report ...` prints a MOCK report; `python -m desk invite ...` creates an invite (operator only, code shown once); `python -m desk senders status|encrypt|rotate` checks / encrypts / re-keys stored transport ids (B02/B06, operator only) |
 | `config.py` | Reads settings; refuses any real adapter while gates are blocked |
 | `app.py` | Web front door: WhatsApp webhook + health check, nothing else |
 | `jobs/scheduler.py` | Writes one dated job per day (07:30 start, 08:45 target, 09:15 hard stop); holidays get a SKIPPED row with the reason |
@@ -54,7 +54,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `transport/telegram/poller.py` | Reads new Telegram messages (long polling) into the same onboarding/chat code |
 | `runner.py` | PC test loop: poll Telegram -> plan today -> run worker -> send |
 | `logsafe.py` | Scrubs tokens from every log line (Telegram's token sits in its URLs) and the B02 sender key |
-| `pii.py` | B02: WhatsApp numbers / Telegram chat ids encrypted at rest (AES-SIV, same id = same ciphertext so lookups work), behind `DESK_ENCRYPT_SENDERS` (OFF); mixed-state check; the encrypt-existing-rows step |
+| `pii.py` | B02: WhatsApp numbers / Telegram chat ids encrypted at rest (AES-SIV, same id = same ciphertext so lookups work), behind `DESK_ENCRYPT_SENDERS` (OFF); mixed-state check; the encrypt-existing-rows step; B06 key rotation (`rotate_existing`) |
 | `transport/whatsapp/client.py` | Talks to the WhatsApp send API; only the in-memory fake exists while G02 is blocked |
 | `transport/whatsapp/templates.py` | List of message templates and their Meta status; only APPROVED ones may be used |
 | `transport/whatsapp/webhook.py` | The webhook itself: size limit → signature → parse → one transaction per message |
@@ -116,6 +116,9 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `test_d03_media.py` | Real pixel + PDF checks: 390 px preview, greyscale, opaque, labels, manifest, page X of Y, searchable text |
 | `test_e06_golden.py` | Maths gives the hand-checked answers; no peeking ahead; contradictions caught; no certainty words |
 | `../test_b02_sender_encryption.py` | B02: flag OFF = rows unchanged; flag ON = no plain wa_id / chat id in any table, onboarding + sends + receipts still work; bad key refuses; CLI migrates mixed rows; key never logged; downgrade refuses |
+| `../test_b05_uat_split.py` | B05: D07 export — a very long bubble splits between paragraphs with its label repeated on each printed page; normal bubbles stay whole |
+| `../test_review_nits.py` | M8T review nits: a bare bot token ending in `-` is redacted whole; a cooling LATER part never holds back an earlier part (order still kept) |
+| `../test_b06_key_rotation.py` | B06: `senders rotate` re-keys every covered value in one transaction; re-run skips values under the new key; a value neither key opens aborts with nothing changed; refusals; keys never printed |
 
 | `tests/test_nse_public_adapter.py` | NSE adapter: parses each sample, maps to sourced facts, missing / malformed / stale = gap, refused at startup, no network imports, full R01-R15 report with gaps |
 | `tests/whatsapp_helpers.py` | Builds signed fake WhatsApp webhooks for tests |

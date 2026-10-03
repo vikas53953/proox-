@@ -8,8 +8,8 @@ can carry text to a log is scrubbed (HIGH-3):
 2. the final formatted line of every logging.Formatter (records built without a Logger);
 3. uncaught exceptions in the main thread and in threads (sys/threading excepthook).
 
-B02: the DESK_SENDER_KEY value is redacted by shape, by `DESK_SENDER_KEY=` and, once
-configured, by its exact text.
+B02/B06: the DESK_SENDER_KEY (and DESK_SENDER_KEY_NEW) value is redacted by shape, by
+`DESK_SENDER_KEY=` / `DESK_SENDER_KEY_NEW=` and, once configured, by its exact text.
 
 The HTTP libraries' own request logging is also turned down to warnings."""
 
@@ -21,9 +21,10 @@ import traceback
 
 TOKEN_PATTERNS = [
     re.compile(r"bot\d{5,}:[A-Za-z0-9_-]{20,}"),  # inside api.telegram.org URLs
-    re.compile(r"\b\d{5,}:[A-Za-z0-9_-]{30,}\b"),  # bare Telegram bot token
+    # bare Telegram bot token; no trailing \b: a token may end in "-" (redact all of it)
+    re.compile(r"\b\d{5,}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])"),
     re.compile(r"Bearer\s+[A-Za-z0-9._-]{16,}"),  # Graph API access token header
-    re.compile(r"DESK_SENDER_KEY\s*[=:]\s*['\"]?[^\s'\",;]+"),  # B02 key in an env dump
+    re.compile(r"DESK_SENDER_KEY(?:_NEW)?\s*[=:]\s*['\"]?[^\s'\",;]+"),  # B02 key in an env dump
     # B02 key shape: urlsafe base64 of 64 bytes (86 chars, optional "==" padding)
     re.compile(r"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{86}(?:==)?(?![A-Za-z0-9_=-])"),
 ]

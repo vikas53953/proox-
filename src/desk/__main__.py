@@ -1,7 +1,7 @@
 """Operator command: print a MOCK report as text.
 
 python -m desk report --scenario full_mock [--kind AUCTION] [--date 2026-10-01]
-python -m desk senders status|encrypt   (B02: transport ids at rest, operator only)
+python -m desk senders status|encrypt|rotate   (B02/B06: transport ids at rest, operator only)
 """
 
 import argparse
@@ -44,7 +44,7 @@ def main() -> None:
     srv.add_argument("--interval", type=int, default=30, help="seconds between cycles")
     srv.add_argument("--auction", action="store_true", help="enable the 09:12 addendum")
     snd = sub.add_parser("senders", help="B02: transport ids at rest (operator only)")
-    snd.add_argument("action", choices=["status", "encrypt"])
+    snd.add_argument("action", choices=["status", "encrypt", "rotate"])
     args = parser.parse_args()
     install_log_redaction()
     if args.cmd == "senders":
@@ -112,13 +112,17 @@ def _factory(check: bool = True):
 def _senders(args: argparse.Namespace) -> None:
     """status: plaintext / encrypted row counts per covered column (mixed = flagged).
     encrypt: rewrite every plaintext transport id, all tables in ONE transaction;
-    idempotent; refused unless DESK_ENCRYPT_SENDERS=1 with a valid DESK_SENDER_KEY."""
+    idempotent; refused unless DESK_ENCRYPT_SENDERS=1 with a valid DESK_SENDER_KEY.
+    rotate (B06): re-encrypt every value from DESK_SENDER_KEY to DESK_SENDER_KEY_NEW in
+    ONE transaction; safe to re-run; the operator then swaps the env vars."""
     from sqlalchemy.exc import IntegrityError
 
     from desk.pii import enabled, encrypt_existing, storage_state
 
-    _, factory = _factory(check=False)
+    settings, factory = _factory(check=False)
     with factory() as s:
+        if args.action == "rotate":
+            _rotate(s, settings)
         if args.action == "encrypt":
             if not enabled():
                 raise SystemExit("refusing: set DESK_ENCRYPT_SENDERS=1 and DESK_SENDER_KEY")
@@ -142,6 +146,34 @@ def _senders(args: argparse.Namespace) -> None:
     print(f"flag {flag}; " + ("MISMATCH: rows do not match the flag" if mixed else "consistent"))
     if mixed:
         raise SystemExit(1)
+
+
+def _rotate(session, settings) -> None:
+    import os
+
+    from sqlalchemy.exc import IntegrityError
+
+    from desk.pii import SenderKeyError, SenderStateError, parse_key, register_key, rotate_existing
+
+    if not settings.senders.enabled:
+        raise SystemExit("refusing: rotate needs DESK_ENCRYPT_SENDERS=1 and DESK_SENDER_KEY")
+    old = settings.senders.key
+    try:
+        new = parse_key(os.environ.get("DESK_SENDER_KEY_NEW", ""), "DESK_SENDER_KEY_NEW")
+        register_key(new)
+        rotated, skipped = rotate_existing(session, old, new)
+        session.commit()
+    except (SenderKeyError, SenderStateError) as exc:
+        session.rollback()
+        raise SystemExit(f"refusing: {exc}") from None
+    except IntegrityError:
+        session.rollback()
+        raise SystemExit(
+            "refusing: the same id is stored under both keys in a unique column; "
+            "nothing was changed (resolve those rows first)"
+        ) from None
+    print(f"rotated {rotated} values; {skipped} already under the new key")
+    print("now set DESK_SENDER_KEY to the new key and clear DESK_SENDER_KEY_NEW")
 
 
 def _invite(args: argparse.Namespace) -> None:
