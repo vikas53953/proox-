@@ -78,6 +78,7 @@ To change the key (rotation, B06):
       Other chats then get only the neutral "invite not valid" reply.
 - [ ] A wrong value (letters, only commas) makes `serve` refuse to start. Fix the value.
 - [ ] Optional (T1 pre-binding): invite a person with `python -m desk invite --channel telegram --chat-id <their chat id>`; set `TELEGRAM_REQUIRE_PREBIND=1` to refuse invites without `--chat-id` (default 0; any value other than 0/1 refuses to start).
+- [ ] Optional (T1 early block detection): `TELEGRAM_TRACK_MEMBER_UPDATES=1` stops daily updates as soon as a person blocks the bot (default 0 = noticed on the next send; any value other than 0/1 refuses to start).
 
 ## 5. First live Telegram send
 

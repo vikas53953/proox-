@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from desk.config import TelegramSettings
 from desk.db.models import TransportCursor
+from desk.onboarding.service import handle_bot_blocked
 from desk.transport.telegram.client import TelegramClient
 from desk.transport.whatsapp.payload import InboundMessage
 from desk.transport.whatsapp.webhook import _process
@@ -35,6 +36,7 @@ class PollResult:
     handled: int
     skipped: int
     offset: int
+    blocked: int = 0  # TELEGRAM_TRACK_MEMBER_UPDATES: "kicked" updates acted on
 
 
 def to_inbound(update: dict, bot_id: str) -> InboundMessage | None:
@@ -53,6 +55,22 @@ def to_inbound(update: dict, bot_id: str) -> InboundMessage | None:
         text=text[:4096] if isinstance(text, str) else None,
         channel="telegram",
     )
+
+
+def member_blocked(update: dict, bot_id: str) -> tuple[str, str, datetime] | None:
+    """A private-chat `my_chat_member` update whose new status is "kicked" (the person
+    blocked the bot) -> (dedupe key, chat id, time). Anything else -> None: in particular
+    "member" again (unblocked) does NOT resubscribe; the person sends START, as today.
+    Key: same scheme as messages (bot, chat, then a part Telegram never reuses);
+    update_id is NOT used (re-randomised after a week, MED-6)."""
+    change = update.get("my_chat_member") or {}
+    chat = change.get("chat") or {}
+    status = (change.get("new_chat_member") or {}).get("status")
+    if chat.get("type") != "private" or status != "kicked" or "id" not in chat:
+        return None
+    chat_id, date = str(chat["id"])[:20], int(change.get("date", 0))
+    key = f"tg:{bot_id}:{chat_id}:member:{date}:{status}"
+    return key, chat_id, datetime.fromtimestamp(date, tz=UTC)
 
 
 def _offset(factory: sessionmaker[Session], bot_id: str, now: datetime) -> int:
@@ -91,17 +109,27 @@ def poll_once(
     timeout_s: int = 0,
 ) -> PollResult:
     offset = _offset(factory, tg.bot_id, now)
-    updates = client.get_updates(offset=offset, timeout_s=timeout_s)
+    if tg.track_member_updates:
+        updates = client.get_updates(offset=offset, timeout_s=timeout_s, member_updates=True)
+    else:  # flag off: the exact call (and request bytes) of before
+        updates = client.get_updates(offset=offset, timeout_s=timeout_s)
     last = offset - 1 if offset else 0
-    handled = skipped = 0
+    handled = skipped = blocked = 0
     state = SimpleNamespace(settings=SimpleNamespace(whatsapp=tg), session_factory=factory)
     for update in sorted(updates, key=lambda u: u["update_id"]):
         msg = to_inbound(update, tg.bot_id)
-        if msg is None:
+        change = member_blocked(update, tg.bot_id) if tg.track_member_updates else None
+        if change is not None:
+            with factory() as session:
+                if handle_bot_blocked(session, tg.bot_id, *change, now) == "blocked":
+                    blocked += 1
+                session.commit()
+            handled += 1
+        elif msg is None:
             skipped += 1
         else:
             _process(state, [msg], now)
             handled += 1
         last = int(update["update_id"])  # sorted batch: the newest handled so far
         _save_cursor(factory, tg.bot_id, last, now)  # after handling: at-least-once
-    return PollResult(len(updates), handled, skipped, last)
+    return PollResult(len(updates), handled, skipped, last, blocked)

@@ -155,6 +155,27 @@ def _queue_template(session: Session, row: Outbox, now: datetime) -> None:
     )
 
 
+def opt_out_blocked(tenant: Tenant) -> None:
+    """The person blocked the bot: that is opting out (a 403 on send, or with
+    TELEGRAM_TRACK_MEMBER_UPDATES=1 a `my_chat_member` "kicked" update). Only START undoes it."""
+    tenant.opt_in_state = "stopped"
+
+
+def cancel_pending_proactive(session: Session, tenant_id, now: datetime, reason: str) -> int:
+    """Cancel a tenant's proactive rows not yet handed to a transport (PENDING or
+    WAITING_WINDOW). A row already SENDING is left alone: it is in flight."""
+    res = session.execute(
+        update(Outbox)
+        .where(
+            Outbox.tenant_id == tenant_id,
+            Outbox.proactive.is_(True),
+            Outbox.state.in_(("PENDING", "WAITING_WINDOW")),
+        )
+        .values(state="CANCELLED", error=reason, last_status_at=now)
+    )
+    return res.rowcount
+
+
 def _transports(given) -> dict[Endpoint, Transport]:
     """{(channel, endpoint): Transport}. Accepts a list/dict of transports or a bare WhatsApp
     GraphClient (older callers). Each transport sends ONLY its own endpoint's rows."""
@@ -234,7 +255,6 @@ def send_batch(
             if row.state == "PENDING":  # a retry: pause this endpoint for the rest of the batch
                 paused[(row.channel, row.business_phone_id)] = row.next_attempt_at
             if outcome.result is SendResult.BLOCKED and row.tenant_id:
-                blocked = s.get(Tenant, row.tenant_id)
-                blocked.opt_in_state = "stopped"  # blocking the bot = opting out
+                opt_out_blocked(s.get(Tenant, row.tenant_id))
             s.commit()
     return stats

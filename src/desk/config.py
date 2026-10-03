@@ -67,6 +67,10 @@ class TelegramSettings:
     # invites without --chat-id and onboarding refuses unbound Telegram invites. Off by
     # default (a pre-bound invite works either way).
     require_prebind: bool = False
+    # TELEGRAM_TRACK_MEMBER_UPDATES=1: also poll `my_chat_member`, so a person blocking the
+    # bot is noticed at once (opt-in stopped, pending proactive rows cancelled) instead of
+    # on the next send's 403. Off by default: getUpdates request unchanged.
+    track_member_updates: bool = False
 
     @property
     def bot_id(self) -> str:
@@ -139,6 +143,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
             allowed_chat_ids=parse_chat_ids(env.get("TELEGRAM_ALLOWED_CHAT_IDS", "")),
             privacy_notice=_flag(env, "TELEGRAM_PRIVACY_NOTICE"),
             require_prebind=_flag(env, "TELEGRAM_REQUIRE_PREBIND"),
+            track_member_updates=_flag(env, "TELEGRAM_TRACK_MEMBER_UPDATES"),
         ),
         senders=_sender_crypto(env),
     )

@@ -83,10 +83,15 @@ class TelegramClient:
     def get_me(self) -> dict:
         return self._read("getMe")
 
-    def get_updates(self, offset: int, timeout_s: int = 25) -> list[dict]:
+    def get_updates(
+        self, offset: int, timeout_s: int = 25, member_updates: bool = False
+    ) -> list[dict]:
+        """member_updates (TELEGRAM_TRACK_MEMBER_UPDATES) adds `my_chat_member`; off, the
+        request is exactly what it always was."""
+        allowed = ["message", "my_chat_member"] if member_updates else ["message"]
         return self._read(
             "getUpdates",
-            {"offset": offset, "timeout": timeout_s, "allowed_updates": json.dumps(["message"])},
+            {"offset": offset, "timeout": timeout_s, "allowed_updates": json.dumps(allowed)},
         )
 
     def send(self, method: str, data: dict, files: dict | None = None) -> Outcome:
@@ -166,6 +171,7 @@ class FakeTelegram:
         self.updates: list[dict] = []
         self.script: list = []  # per send: "ok" | dict error body | int status | Exception
         self.poll_script: list = []  # per getUpdates, same items; then the real queue
+        self.poll_requests: list[bytes] = []  # raw getUpdates bodies, as sent
         self._next_update = 1000
         self.confirmed_offset = 0
 
@@ -195,6 +201,33 @@ class FakeTelegram:
         )
         return self._next_update
 
+    def member_update(
+        self,
+        user_id: int,
+        new_status: str = "kicked",
+        old_status: str = "member",
+        chat_type: str = "private",
+        date: int = 1790000100,
+        update_id: int | None = None,
+    ) -> int:
+        """Queue a `my_chat_member` update ("kicked" = the person blocked the bot).
+        Like real Telegram, it is only delivered when allowed_updates asks for it."""
+        self._next_update = update_id if update_id is not None else self._next_update + 1
+        bot = {"id": self.bot_id, "is_bot": True, "username": self.username}
+        self.updates.append(
+            {
+                "update_id": self._next_update,
+                "my_chat_member": {
+                    "chat": {"id": user_id, "type": chat_type},
+                    "from": {"id": user_id, "is_bot": False, "first_name": "MOCK"},
+                    "date": date,
+                    "old_chat_member": {"status": old_status, "user": bot},
+                    "new_chat_member": {"status": new_status, "user": bot},
+                },
+            }
+        )
+        return self._next_update
+
     def handler(self, request: httpx.Request) -> httpx.Response:
         method = request.url.path.rsplit("/", 1)[-1]
         if method == "getMe":
@@ -213,11 +246,14 @@ class FakeTelegram:
                 return httpx.Response(step, text="error")
             if isinstance(step, dict):
                 return httpx.Response(step.get("error_code", 400), json={"ok": False, **step})
+            self.poll_requests.append(request.content)
             form = dict(httpx.QueryParams(request.content.decode()))
             offset = int(form.get("offset", 0))
             self.confirmed_offset = max(self.confirmed_offset, offset)
             self.updates = [u for u in self.updates if u["update_id"] >= offset]
-            return httpx.Response(200, json={"ok": True, "result": list(self.updates)})
+            wanted = set(json.loads(form.get("allowed_updates", '["message"]')))
+            result = [u for u in self.updates if wanted & (u.keys() - {"update_id"})]
+            return httpx.Response(200, json={"ok": True, "result": result})
         ctype = request.headers.get("content-type", "")
         if ctype.startswith("multipart/"):
             fields = {"multipart": True, "bytes": len(request.content)}

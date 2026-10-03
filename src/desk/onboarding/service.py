@@ -32,6 +32,7 @@ from desk.onboarding import messages as msgs
 from desk.onboarding.invites import find_code, hash_code, redact
 from desk.outbox.parts import text_index, text_parts, text_section
 from desk.outbox.policy import ist_today, release_waiting
+from desk.outbox.sender import cancel_pending_proactive, opt_out_blocked
 from desk.render.charts import report_charts
 from desk.report.model import Report
 from desk.transport.whatsapp.payload import InboundMessage
@@ -254,6 +255,54 @@ def _privacy_notice(session: Session, wa, msg: InboundMessage, tenant: Tenant, n
         return
     body = msgs.privacy_notice_telegram(encrypted=pii.enabled())
     _queue(session, msg, tenant, "privacy_notice", body, now, key=f"privacy_notice:{tenant.id}")
+
+
+BLOCKED_REASON = "recipient blocked the bot (my_chat_member)"
+
+
+def handle_bot_blocked(
+    session: Session, bot_id: str, key: str, chat_id: str, provider_time: datetime, now
+) -> str:
+    """TELEGRAM_TRACK_MEMBER_UPDATES: the person blocked the bot (my_chat_member "kicked").
+    Same opt-out as a 403 on send, plus their pending proactive rows are cancelled.
+    Deduplicated on `key` in inbound_messages (like messages), so a re-delivered update
+    can never undo a later START. The caller owns the transaction."""
+    fresh = session.execute(
+        pg_insert(Inbound)
+        .values(
+            message_id=key,
+            channel="telegram",
+            business_phone_id=bot_id,
+            sender=chat_id,
+            provider_time=provider_time,
+            received_at=now,
+            type="my_chat_member",
+            handled_as="received",
+        )
+        .on_conflict_do_nothing(index_elements=["message_id"])
+        .returning(Inbound.message_id)
+    ).first()
+    if fresh is None:
+        return "duplicate"
+    who = InboundMessage(
+        message_id=key,
+        waba_id="",
+        phone_number_id=bot_id,
+        sender=chat_id,
+        provider_time=provider_time,
+        type="other",
+        text=None,
+        channel="telegram",
+    )
+    tenant = _find_tenant(session, who)
+    inbound = session.get(Inbound, key)
+    if tenant is None:
+        inbound.handled_as = "blocked_no_tenant"
+        return inbound.handled_as
+    opt_out_blocked(tenant)
+    cancel_pending_proactive(session, tenant.id, now, BLOCKED_REASON)
+    inbound.handled_as, inbound.tenant_id = "blocked", tenant.id
+    return "blocked"
 
 
 def handle_message(
