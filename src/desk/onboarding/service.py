@@ -32,6 +32,7 @@ from desk.onboarding import messages as msgs
 from desk.onboarding.invites import find_code, hash_code, redact
 from desk.outbox.parts import text_index, text_parts, text_section
 from desk.outbox.policy import ist_today, release_waiting
+from desk.outbox.sender import cancel_pending_proactive, opt_out_blocked
 from desk.render.charts import report_charts
 from desk.report.model import Report
 from desk.transport.whatsapp.payload import InboundMessage
@@ -86,7 +87,12 @@ def _find_tenant(session: Session, msg: InboundMessage) -> Tenant | None:
     ).scalar_one_or_none()
 
 
-def _try_bind(session: Session, msg: InboundMessage, now: datetime) -> Tenant | None:
+def _try_bind(
+    session: Session, msg: InboundMessage, now: datetime, require_prebind: bool = False
+) -> Tenant | None:
+    """A pre-bound invite (bound_sender set) matches only its own sender. With
+    TELEGRAM_REQUIRE_PREBIND=1 an unbound Telegram invite matches nobody. No match =
+    the caller's neutral reply, and the invite stays open (no information leak)."""
     code = find_code(msg.text)
     conds = [
         Invite.state == "open",
@@ -101,6 +107,8 @@ def _try_bind(session: Session, msg: InboundMessage, now: datetime) -> Tenant | 
         ]
     else:  # preapproved sender: plain "Hi" is enough
         conds += [Invite.token_hash.is_(None), Invite.bound_sender == msg.sender]
+    if require_prebind and msg.channel == "telegram":
+        conds.append(Invite.bound_sender.is_not(None))
     invite = session.execute(
         select(Invite).where(*conds).order_by(Invite.created_at).limit(1).with_for_update()
     ).scalar_one_or_none()  # blocks on a concurrent consumer, then re-checks state
@@ -249,6 +257,54 @@ def _privacy_notice(session: Session, wa, msg: InboundMessage, tenant: Tenant, n
     _queue(session, msg, tenant, "privacy_notice", body, now, key=f"privacy_notice:{tenant.id}")
 
 
+BLOCKED_REASON = "recipient blocked the bot (my_chat_member)"
+
+
+def handle_bot_blocked(
+    session: Session, bot_id: str, key: str, chat_id: str, provider_time: datetime, now
+) -> str:
+    """TELEGRAM_TRACK_MEMBER_UPDATES: the person blocked the bot (my_chat_member "kicked").
+    Same opt-out as a 403 on send, plus their pending proactive rows are cancelled.
+    Deduplicated on `key` in inbound_messages (like messages), so a re-delivered update
+    can never undo a later START. The caller owns the transaction."""
+    fresh = session.execute(
+        pg_insert(Inbound)
+        .values(
+            message_id=key,
+            channel="telegram",
+            business_phone_id=bot_id,
+            sender=chat_id,
+            provider_time=provider_time,
+            received_at=now,
+            type="my_chat_member",
+            handled_as="received",
+        )
+        .on_conflict_do_nothing(index_elements=["message_id"])
+        .returning(Inbound.message_id)
+    ).first()
+    if fresh is None:
+        return "duplicate"
+    who = InboundMessage(
+        message_id=key,
+        waba_id="",
+        phone_number_id=bot_id,
+        sender=chat_id,
+        provider_time=provider_time,
+        type="other",
+        text=None,
+        channel="telegram",
+    )
+    tenant = _find_tenant(session, who)
+    inbound = session.get(Inbound, key)
+    if tenant is None:
+        inbound.handled_as = "blocked_no_tenant"
+        return inbound.handled_as
+    opt_out_blocked(tenant)
+    cancel_pending_proactive(session, tenant.id, now, BLOCKED_REASON)
+    inbound.handled_as, inbound.tenant_id = "blocked", tenant.id
+    return "blocked"
+
+
 def handle_message(
     session: Session,
     wa: WhatsAppSettings | TelegramSettings,
@@ -288,7 +344,7 @@ def handle_message(
     if tenant is not None:
         handled = _route(session, msg, tenant, now)
     else:
-        tenant = _try_bind(session, msg, now)
+        tenant = _try_bind(session, msg, now, bool(getattr(wa, "require_prebind", False)))
         if tenant is not None:
             _queue(
                 session,

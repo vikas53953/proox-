@@ -51,14 +51,14 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `transport/base.py` | What every channel must offer + each channel's rules (window, templates, receipts) |
 | `transport/whatsapp/adapter.py` | WhatsApp behind that common interface |
 | `transport/telegram/client.py` | Telegram TEST transport: Bot API calls, in-memory fake, live-mode gate |
-| `transport/telegram/poller.py` | Reads new Telegram messages (long polling) into the same onboarding/chat code |
+| `transport/telegram/poller.py` | Reads new Telegram messages (long polling) into the same onboarding/chat code; with `TELEGRAM_TRACK_MEMBER_UPDATES=1` also "bot blocked" (`my_chat_member` kicked) updates |
 | `runner.py` | PC test loop: poll Telegram -> plan today -> run worker -> send |
 | `logsafe.py` | Scrubs tokens from every log line (Telegram's token sits in its URLs) and the B02 sender key |
 | `pii.py` | B02: WhatsApp numbers / Telegram chat ids encrypted at rest (AES-SIV, same id = same ciphertext so lookups work), behind `DESK_ENCRYPT_SENDERS` (OFF); mixed-state check; the encrypt-existing-rows step; B06 key rotation (`rotate_existing`) |
 | `transport/whatsapp/client.py` | Talks to the WhatsApp send API; only the in-memory fake exists while G02 is blocked |
 | `transport/whatsapp/templates.py` | List of message templates and their Meta status; only APPROVED ones may be used |
 | `transport/whatsapp/webhook.py` | The webhook itself: size limit → signature → parse → one transaction per message |
-| `onboarding/invites.py` | Makes invite codes; stores only their fingerprint (hash); hides codes in stored text |
+| `onboarding/invites.py` | Makes invite codes; stores only their fingerprint (hash); hides codes in stored text; Telegram invites can be pre-bound to one chat id (T1) |
 | `onboarding/service.py` | One message in: dedupe → existing tenant? reply : try invite → welcome + opt-in question (Telegram + `TELEGRAM_PRIVACY_NOTICE=1`: the DRAFT privacy notice in between, once per tenant) |
 | `onboarding/messages.py` | The reply texts (Roman Hinglish), from the design doc drafts; plus the **DRAFT** Telegram privacy disclosure (T1, Hinglish + English, wording pending owner) |
 | `agents/tools.py` | Which role may use which tool; anything requested by outside text is refused |
@@ -122,6 +122,8 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `../test_b07_b08.py` | B07: `TELEGRAM_ALLOWED_CHAT_IDS` unset = unchanged; set = outsider gets the neutral reply, invite stays open, non-listed tenants get nothing; bad values refuse. B08: fake WhatsApp refuses a real token in `serve` and never claims a real phone id's rows |
 | `../test_b06_key_rotation.py` | B06: `senders rotate` re-keys every covered value in one transaction; re-run skips values under the new key; a value neither key opens aborts with nothing changed; refusals; keys never printed |
 
+| `tests/test_telegram_prebind.py` | T1 invite pre-binding: `--chat-id` binds a Telegram invite to one chat (stored as a TransportId, encrypted with B02); other chats get the neutral reply and the invite stays open; `TELEGRAM_REQUIRE_PREBIND=1` refuses unbound Telegram invites (CLI + onboarding), never WhatsApp; bad values refuse |
+| `tests/test_telegram_member_updates.py` | T1 early block detection: flag off = getUpdates request byte-identical, member updates ignored; on = "kicked" in a private chat stops the opt-in like a 403 and cancels pending proactive rows (not in-flight, not replies); unblocking does not resubscribe; a re-delivered kick never undoes a later START |
 | `tests/test_telegram_privacy_notice.py` | T1 privacy notice: flag off = onboarding unchanged; on = one notice right after the welcome, never twice per tenant, never on WhatsApp; never claims encryption while B02 is off; bad values refuse |
 | `tests/test_nse_verify.py` | `nse verify`: samples OK; each required field / column removed, broken JSON, non-UTF-8, bad numbers, failed cross-checks, unknown names, empty folder = non-zero exit; extra fields are notes; NSE dated names recognised; gate still refuses `nse_public` |
 | `tests/test_nse_public_adapter.py` | NSE adapter (steps 2 + 2b): parses each sample, maps to sourced facts, missing / malformed / stale = gap, refused at startup, no network imports, full R01-R15 report with gaps |

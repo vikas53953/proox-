@@ -40,6 +40,9 @@ def main() -> None:
     inv.add_argument("--bound-sender", default=None)
     inv.add_argument("--no-code", action="store_true", help="preapproved sender: Hi is enough")
     inv.add_argument("--ttl-hours", type=int, default=72)
+    inv.add_argument(
+        "--chat-id", type=int, default=None, help="Telegram only: pre-bind to this chat id"
+    )
     srv = sub.add_parser("serve", help="PC test loop: poll Telegram, plan, work, send")
     srv.add_argument("--once", action="store_true")
     srv.add_argument("--interval", type=int, default=30, help="seconds between cycles")
@@ -212,8 +215,15 @@ def _invite(args: argparse.Namespace) -> None:
         tg = settings.telegram
         if not tg.bot_username or tg.bot_id == "0":
             raise SystemExit("set TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME first")
-        business_id, with_code, bound = tg.bot_id, True, None
+        if args.chat_id is None and tg.require_prebind:
+            raise SystemExit(
+                "refusing: TELEGRAM_REQUIRE_PREBIND=1 needs --chat-id <the person's chat id>"
+            )
+        bound = None if args.chat_id is None else str(args.chat_id)
+        business_id, with_code = tg.bot_id, True
     else:
+        if args.chat_id is not None:
+            raise SystemExit("--chat-id is for Telegram invites only")
         if not args.phone_number_id:
             raise SystemExit("--phone-number-id is required for WhatsApp")
         business_id, with_code, bound = args.phone_number_id, not args.no_code, args.bound_sender
@@ -230,7 +240,7 @@ def _invite(args: argparse.Namespace) -> None:
         session.commit()
     print(
         f"{args.channel} invite {invite.id} expires {invite.expires_at:%Y-%m-%d %H:%M} UTC "
-        "(single use)"
+        "(single use)" + (", pre-bound to one chat id" if args.chat_id is not None else "")
     )
     if code and args.channel == "telegram":
         link = telegram_deep_link(settings.telegram.bot_username, code)
