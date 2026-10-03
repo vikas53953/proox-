@@ -86,7 +86,12 @@ def _find_tenant(session: Session, msg: InboundMessage) -> Tenant | None:
     ).scalar_one_or_none()
 
 
-def _try_bind(session: Session, msg: InboundMessage, now: datetime) -> Tenant | None:
+def _try_bind(
+    session: Session, msg: InboundMessage, now: datetime, require_prebind: bool = False
+) -> Tenant | None:
+    """A pre-bound invite (bound_sender set) matches only its own sender. With
+    TELEGRAM_REQUIRE_PREBIND=1 an unbound Telegram invite matches nobody. No match =
+    the caller's neutral reply, and the invite stays open (no information leak)."""
     code = find_code(msg.text)
     conds = [
         Invite.state == "open",
@@ -101,6 +106,8 @@ def _try_bind(session: Session, msg: InboundMessage, now: datetime) -> Tenant | 
         ]
     else:  # preapproved sender: plain "Hi" is enough
         conds += [Invite.token_hash.is_(None), Invite.bound_sender == msg.sender]
+    if require_prebind and msg.channel == "telegram":
+        conds.append(Invite.bound_sender.is_not(None))
     invite = session.execute(
         select(Invite).where(*conds).order_by(Invite.created_at).limit(1).with_for_update()
     ).scalar_one_or_none()  # blocks on a concurrent consumer, then re-checks state
@@ -288,7 +295,7 @@ def handle_message(
     if tenant is not None:
         handled = _route(session, msg, tenant, now)
     else:
-        tenant = _try_bind(session, msg, now)
+        tenant = _try_bind(session, msg, now, bool(getattr(wa, "require_prebind", False)))
         if tenant is not None:
             _queue(
                 session,

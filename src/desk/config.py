@@ -63,6 +63,10 @@ class TelegramSettings:
     # TELEGRAM_PRIVACY_NOTICE=1: send the (DRAFT) privacy disclosure once, right after a
     # Telegram welcome (GATES.md T1). Off by default.
     privacy_notice: bool = False
+    # TELEGRAM_REQUIRE_PREBIND=1 (GATES.md T1 pre-binding rule): `invite` refuses Telegram
+    # invites without --chat-id and onboarding refuses unbound Telegram invites. Off by
+    # default (a pre-bound invite works either way).
+    require_prebind: bool = False
 
     @property
     def bot_id(self) -> str:
@@ -134,6 +138,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
             live=env.get("DESK_TELEGRAM_LIVE", "") == "1",
             allowed_chat_ids=parse_chat_ids(env.get("TELEGRAM_ALLOWED_CHAT_IDS", "")),
             privacy_notice=_flag(env, "TELEGRAM_PRIVACY_NOTICE"),
+            require_prebind=_flag(env, "TELEGRAM_REQUIRE_PREBIND"),
         ),
         senders=_sender_crypto(env),
     )

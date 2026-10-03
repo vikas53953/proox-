@@ -50,7 +50,7 @@ test (owner only) happen without waiting for G02.
 | Bot token: environment variable on the owner's PC only, test-only, interim until the G05 secret store; never in code, chat, logs, commits; E01 secret scan flags token shapes; logs are redacted | approved |
 | Invite: deep link `t.me/<bot>?start=<code>`, single use, max 24 h | approved |
 | B02 encryption at rest covers Telegram ids | approved (with B02) |
-| **Before any user other than the owner:** an invite pre-binding rule for Telegram | **required, not built** |
+| **Before any user other than the owner:** an invite pre-binding rule for Telegram | built (opt-in); owner decides whether to require it — `invite --channel telegram --chat-id <id>` binds the code to one chat (other chats: neutral reply, invite stays open); `TELEGRAM_REQUIRE_PREBIND=1` (default 0) refuses unbound Telegram invites in `invite` and onboarding |
 | **Before any user other than the owner:** a privacy disclosure (Telegram bot chats are not end-to-end encrypted; Telegram stores them) | privacy disclosure — DRAFT built behind TELEGRAM_PRIVACY_NOTICE (off); wording pending owner |
 | Optional chat-id allowlist (`TELEGRAM_ALLOWED_CHAT_IDS`, B07): when set, other chats cannot bind an invite (neutral reply, invite not consumed); existing Telegram tenants not on the list are not handled and get no messages (checked right before each send); invalid values refuse to start | built, unset by default; owner to decide default |
 | Delivery truth: Telegram reports no delivery/read receipts — SENT is final; timeouts stay UNKNOWN (no reconcile) | built |
