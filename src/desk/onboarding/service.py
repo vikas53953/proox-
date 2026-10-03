@@ -222,7 +222,8 @@ def _send_text_version(
     charts = {c.manifest["lens"]: c.alt_text for c in report_charts(report)}
     if what == "ALL":
         for i, body in enumerate(text_parts(report, chart_texts=charts), 1):
-            _queue(session, msg, tenant, "text_part", body, now, key=f"{msg.message_id}:text:p{i}")
+            at = now + (i - 1) * ONBOARDING_STEP  # keeps TEXT ALL parts in order
+            _queue(session, msg, tenant, "text_part", body, at, key=f"{msg.message_id}:text:p{i}")
         return "text_all"
     try:
         lens = LensId(what)

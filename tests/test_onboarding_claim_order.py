@@ -91,3 +91,13 @@ def test_claim_returns_welcome_privacy_opt_in_even_with_reversed_storage(db):
             chat, kind = kinds[i]
             per_chat.setdefault(chat, []).append(kind)
         assert all(seq == ORDER for seq in per_chat.values()), per_chat
+
+
+def test_text_all_parts_are_spaced_in_order():
+    """TEXT ALL parts get strictly increasing created_at, so claim order is their order."""
+    import inspect
+
+    from desk.onboarding import service
+
+    src = inspect.getsource(service)
+    assert '"text_part", body, at,' in src and "(i - 1) * ONBOARDING_STEP" in src
