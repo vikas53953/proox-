@@ -6,6 +6,7 @@ python uat/render_html.py OUT_DIR      # reads OUT_DIR/transcript.json, writes i
 import base64
 import html
 import json
+import math
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,10 @@ from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")
 LONG = 700
+# B05: a bubble estimated taller than this many printed lines may split across pages in
+# print (label line repeated on each continuation); shorter bubbles always stay whole.
+SPLIT_LINES = 20
+CHARS_PER_LINE = 80  # printed bubble width (88% of A4 text width) at the body font size
 STATE_LABEL = {
     "READ": "read",
     "DELIVERED": "delivered",
@@ -83,6 +88,11 @@ p { margin: 0; }
 .note.held { color: var(--warn); }
 details summary { cursor: pointer; color: var(--accent); font-size: 0.85rem; }
 details[open] summary { margin-bottom: 4px; }
+/* B05 split bubble: a table only so print can repeat its label; on screen it is a bubble */
+table.msg.split { border-collapse: separate; border-spacing: 0; }
+table.msg.split :is(thead, tbody, tr, td) { display: block; padding: 0; }
+table.msg.split tr.end td { padding-top: 4px; }
+table.msg.split .meta { text-align: right; }
 .media { min-width: 0; }
 .media img { border-radius: 6px; border: 1px solid var(--line); display: block;
   max-width: 100%; height: auto; }
@@ -108,6 +118,14 @@ ul.jobs { margin: 0; padding-left: 1.1em; font: 0.8rem/1.6 var(--font-mono); col
   .note { display: block; width: fit-content; margin-left: auto; margin-right: auto;
     break-inside: avoid; }
   .panel { break-inside: avoid; }
+  /* B05: a very long bubble may split; its label line (thead) repeats on each page */
+  table.msg.split { display: table; break-inside: auto; border-collapse: separate;
+    border-spacing: 0; }
+  table.msg.split thead { display: table-header-group; }
+  table.msg.split tbody { display: table-row-group; }
+  table.msg.split tr { display: table-row; }
+  table.msg.split td { display: table-cell; }
+  table.msg.split thead td { padding-bottom: 4px; }
 }
 a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 """
@@ -165,11 +183,36 @@ def bubble(ev: dict) -> str:
             f'<div class="body">{e(first)}</div><details><summary>Show full message '
             f'({len(text)} characters)</summary><div class="body">{e(text)}</div></details>'
         )
+    elif not media and printed_lines(text) > SPLIT_LINES:
+        status = (
+            "" if me else f" · {STATE_LABEL.get(ev.get('state', ''), ev.get('state', '').lower())}"
+        )
+        return split_bubble(parts[0], text, f"{ist(ev['t'])}{status}", me)
     else:
         parts.append(f'<div class="body">{e(text)}</div>')
     status = "" if me else f" · {STATE_LABEL.get(ev.get('state', ''), ev.get('state', '').lower())}"
     parts.append(f'<div class="meta">{ist(ev["t"])}{status}</div>')
     return f'<div class="msg{" me" if me else ""}">{"".join(parts)}</div>'
+
+
+def printed_lines(text: str) -> int:
+    return sum(max(1, math.ceil(len(line) / CHARS_PER_LINE)) for line in text.split("\n"))
+
+
+def split_bubble(label: str, text: str, meta: str, me: bool) -> str:
+    """B05: a very long bubble that print may split between paragraphs (rows); the label
+    line is the table header, which the browser repeats on every continuation page.
+    A blank line between paragraphs is kept as a leading newline (pre-wrap)."""
+    paras = text.split("\n\n")
+    rows = "".join(
+        f'<tr><td><div class="body">{html.escape(p if i == 0 else chr(10) + p)}</div></td></tr>'
+        for i, p in enumerate(paras)
+    )
+    return (
+        f'<table class="msg split{" me" if me else ""}" role="presentation">'
+        f"<thead><tr><td>{label}</td></tr></thead><tbody>{rows}"
+        f'<tr class="end"><td><div class="meta">{meta}</div></td></tr></tbody></table>'
+    )
 
 
 def render(out: Path, standalone: bool = False) -> None:

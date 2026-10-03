@@ -20,7 +20,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `.env.example` | Setting names with empty placeholders — never real secrets |
 | `alembic.ini`, `alembic/` | Database schema changes. `0001` = M2 tables; `0002` = jobs, delivery states, receipts; `0003` = media, feedback, corrections; `0004` = channel column, Telegram cursors; `0005` = B02 wider transport-id columns (downgrade refuses while any value is encrypted) |
 | `config/whatsapp_templates.json` | Template drafts from the design doc — status DRAFT, not submitted (G02) |
-| `uat/` | D07 run: `mock_days.py` plays 3 mock days end to end; `render_html.py` makes the chat page you review; `samples/uat/` holds the forwardable HTML + PDF |
+| `uat/` | D07 run: `mock_days.py` plays 3 mock days end to end; `render_html.py` makes the chat page you review (B05: very long bubbles may split across printed pages, label repeated); `samples/uat/` holds the forwardable HTML + PDF |
 | `samples/` | Mock reports as text, plus `samples/media/`: the PDF, the chart PNG and its manifest — open them directly |
 
 ## `src/desk/` — the program
@@ -113,6 +113,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `test_d03_media.py` | Real pixel + PDF checks: 390 px preview, greyscale, opaque, labels, manifest, page X of Y, searchable text |
 | `test_e06_golden.py` | Maths gives the hand-checked answers; no peeking ahead; contradictions caught; no certainty words |
 | `../test_b02_sender_encryption.py` | B02: flag OFF = rows unchanged; flag ON = no plain wa_id / chat id in any table, onboarding + sends + receipts still work; bad key refuses; CLI migrates mixed rows; key never logged; downgrade refuses |
+| `../test_b05_uat_split.py` | B05: D07 export — a very long bubble splits between paragraphs with its label repeated on each printed page; normal bubbles stay whole |
 | `../test_review_nits.py` | M8T review nits: a bare bot token ending in `-` is redacted whole; a cooling LATER part never holds back an earlier part (order still kept) |
 | `../test_b06_key_rotation.py` | B06: `senders rotate` re-keys every covered value in one transaction; re-run skips values under the new key; a value neither key opens aborts with nothing changed; refusals; keys never printed |
 
