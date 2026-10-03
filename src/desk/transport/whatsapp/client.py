@@ -135,13 +135,32 @@ class GraphClient:
         return Outcome(SendResult.FAILED, detail=f"upload rejected: {str(body)[:200]}")
 
 
+MOCK_PHONE_NUMBER_ID = "100200300"  # the fake's own number; never a real one
+
+
 def make_client(settings) -> "GraphClient":
-    """Only mock mode exists while G02 is BLOCKED: no request can reach graph.facebook.com."""
+    """Only mock mode exists while G02 is BLOCKED: no request can reach graph.facebook.com.
+    B08: the fake always uses its OWN mock phone id (like FakeTelegram's own bot id), so
+    rows of a real WHATSAPP_PHONE_NUMBER_ID are never claimed and marked ACCEPTED by it."""
     from desk.config import GateBlockedError
 
     if settings.mode != "mock":
         raise GateBlockedError("real WhatsApp sending BLOCKED by G02")
-    return FakeGraph().client(settings.whatsapp.phone_number_id or "100200300")
+    return FakeGraph().client(MOCK_PHONE_NUMBER_ID)
+
+
+def make_send_client(settings) -> "GraphClient":
+    """The client `serve` sends with. B08 (HIGH-1 rule for WhatsApp): a real access token
+    with the in-memory fake could make real rows look ACCEPTED while nothing is sent, so
+    the fake refuses to start while WHATSAPP_ACCESS_TOKEN is set."""
+    from desk.config import GateBlockedError
+
+    if settings.whatsapp.access_token:
+        raise GateBlockedError(
+            "WHATSAPP_ACCESS_TOKEN is set but real WhatsApp sending is BLOCKED (G02): "
+            "refusing the in-memory fake. Unset the token for mock runs."
+        )
+    return make_client(settings)
 
 
 class FakeGraph:
@@ -178,6 +197,6 @@ class FakeGraph:
             return httpx.Response(step, text="error")
         return httpx.Response(400, json=step)
 
-    def client(self, phone_number_id: str = "100200300") -> GraphClient:
+    def client(self, phone_number_id: str = MOCK_PHONE_NUMBER_ID) -> GraphClient:
         http = httpx.Client(transport=httpx.MockTransport(self.handler))
         return GraphClient(http, phone_number_id, "MOCK-TOKEN")

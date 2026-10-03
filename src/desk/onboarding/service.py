@@ -266,6 +266,14 @@ def handle_message(
     if fresh is None:
         return Outcome("duplicate")
 
+    allows = getattr(wa, "allows", None)  # B07: Telegram chat-id allowlist (unset = all)
+    if allows is not None and not allows(msg.sender):
+        # Not on TELEGRAM_ALLOWED_CHAT_IDS: same neutral reply (and 24h limit) as a bad
+        # invite; nothing is bound or consumed, an existing tenant is not routed.
+        handled = _neutral(session, msg, now).replace("not_bound", "not_allowed")
+        session.get(Inbound, msg.message_id).handled_as = handled
+        return Outcome(handled)
+
     tenant = _find_tenant(session, msg)
     if tenant is not None:
         handled = _route(session, msg, tenant, now)

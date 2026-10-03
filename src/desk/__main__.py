@@ -9,7 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from desk.agents.model import MockModelAdapter
-from desk.config import load_settings
+from desk.config import SettingsError, load_settings
 from desk.db.session import make_engine, make_session_factory
 from desk.feeds.fixture import FixtureFeed
 from desk.lenses.context import ReportKind
@@ -95,7 +95,7 @@ def _factory(check: bool = True):
     try:
         settings = load_settings()
         configure_from(settings)  # B02: once, before any DB access
-    except SenderKeyError as exc:
+    except (SenderKeyError, SettingsError) as exc:
         raise SystemExit(f"refusing to start: {exc}") from None
     if not settings.database_url:
         raise SystemExit("DESK_DATABASE_URL is not set")
@@ -214,9 +214,10 @@ def _invite(args: argparse.Namespace) -> None:
 
 def _serve(args: argparse.Namespace) -> None:
     import time
+    from dataclasses import replace
 
     from desk.agents.model import MockModelAdapter
-    from desk.config import TelegramSettings
+    from desk.config import GateBlockedError
     from desk.jobs.worker import Deps
     from desk.runner import PollBackoff, describe, run_cycle, serve_loop
     from desk.transport.telegram.client import (
@@ -225,12 +226,18 @@ def _serve(args: argparse.Namespace) -> None:
         make_telegram_transport,
     )
     from desk.transport.whatsapp.adapter import WhatsAppTransport
-    from desk.transport.whatsapp.client import make_client
+    from desk.transport.whatsapp.client import MOCK_PHONE_NUMBER_ID, make_send_client
     from desk.transport.whatsapp.templates import TemplateRegistry
 
     settings, factory = _factory()
     calendar = TradingCalendar.load(FIXTURES / "calendar" / "NSE-CM-holidays-2026-v1.json")
-    tg_transport, tg_client = make_telegram_transport(settings)
+    try:  # fake transports refuse to start while a real token is set (HIGH-1, B08)
+        wa_client = make_send_client(settings)
+        tg_transport, tg_client = make_telegram_transport(settings)
+    except GateBlockedError as exc:
+        raise SystemExit(f"refusing to start: {exc}") from None
+    if settings.whatsapp.phone_number_id not in ("", MOCK_PHONE_NUMBER_ID):
+        print("note: WHATSAPP_PHONE_NUMBER_ID is set; its rows stay queued (G02: fake only)")
     if settings.telegram.live:
         try:
             me = tg_client.get_me()
@@ -245,13 +252,13 @@ def _serve(args: argparse.Namespace) -> None:
         # G03 open: MOCK fixtures only; other days show every lens as UNAVAILABLE
         feed_for=lambda day: FixtureFeed(FIXTURES / "market", date(2026, 10, 1), "auction_mock"),
     )
-    transports = {"whatsapp": WhatsAppTransport(make_client(settings)), "telegram": tg_transport}
+    transports = {"whatsapp": WhatsAppTransport(wa_client), "telegram": tg_transport}
     templates = TemplateRegistry.load(FIXTURES.parent / "config" / "whatsapp_templates.json")
     # fake mode polls the fake bot; live mode the real one (same id as the transport)
     tg_settings = (
         settings.telegram
         if settings.telegram.live
-        else TelegramSettings(bot_token=f"{tg_transport.endpoint}:MOCK")
+        else replace(settings.telegram, bot_token=f"{tg_transport.endpoint}:MOCK")
     )
 
     backoff = PollBackoff()
