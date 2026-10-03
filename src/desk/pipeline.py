@@ -10,7 +10,7 @@ from desk.agents.model import ModelAdapter
 from desk.agents.research import gather
 from desk.agents.reviewer import review
 from desk.core.lens import LensId, LensResult
-from desk.feeds.base import FeedAdapter
+from desk.feeds.base import FeedAdapter, fetch_problems
 from desk.lenses import (
     r01_news,
     r02_global,
@@ -108,6 +108,7 @@ def run_report(
         datasets=gather(feed, trading_date),
         model=model,
     )
+    ctx.fetch_problems = fetch_problems(feed)  # after gather: problems are found while fetching
     for module in BEFORE_R14:
         result: LensResult = module.build(ctx)
         ctx.results[result.lens] = result

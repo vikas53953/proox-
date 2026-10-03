@@ -16,6 +16,7 @@ from itertools import groupby
 
 from desk.core.facts import Fact
 from desk.core.lens import LensId, LensResult
+from desk.feeds.base import TERMS_GAP_TOPIC
 from desk.market_calendar import fmt_ist
 from desk.report.model import Report
 
@@ -29,6 +30,7 @@ GAP_TOPICS = {
     "fut_bars": "Futures bars",
     "index_bars": "Index bars",
     "margin financing": "Margin financing",
+    TERMS_GAP_TOPIC: "Data usage terms",
 }
 GROUP_HEAD = re.compile(r"^(\d+) items: ")  # shared-provenance group header (see _pack)
 _PAREN = re.compile(r"\s*\(([^()]*)\)")
@@ -132,9 +134,9 @@ def gap_lines(report: Report) -> list[str]:
     effect stays in each lens section, so the summary line is not repeated per lens."""
     grouped: dict[tuple, list[str]] = {}
     for r in report.lenses:
-        if r.lens is LensId.R15:
-            continue  # R15 restates the same gaps per dataset
         for g in r.gaps:
+            if r.lens is LensId.R15 and g.topic != TERMS_GAP_TOPIC:
+                continue  # R15 restates the same gaps per dataset; only its terms gap is new
             if not g.degrades:
                 continue
             topic = GAP_TOPICS.get(g.topic, g.topic[:1].upper() + g.topic[1:])
