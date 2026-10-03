@@ -69,6 +69,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `core/scenario.py` | Base/up/down paths; blocks words like "guaranteed" and "70% chance" |
 | `feeds/base.py` | The plug socket every data feed must fit (fixture now, NSE public next, broker later) + what each feed has rights to |
 | `feeds/fixture.py` | Reads the MOCK files in `fixtures/market/` |
+| `feeds/nse_public.py` | G03 step 2, **DISABLED**: NSE public data (pre-open, option chain, FII/DII) read from saved files only (`FileSource`, no network code); everything else declared not granted; startup refuses `DESK_FEED_ADAPTER=nse_public` while G03 is blocked |
 | `quant/bars.py` | Price bars; drops any bar not finished by the cutoff (no peeking ahead) |
 | `quant/levels.py` | Prior-day high / low / close |
 | `quant/profile.py` | Volume profile: POC and 70% value area |
@@ -98,6 +99,8 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `market/2026-10-01/prior_session_stale/` | Same, but the sector file is from the wrong day |
 | `market/2026-10-01/malicious_source/` | Adds a news item that tries to give orders (prompt injection) |
 | `market/2026-10-01/auction_mock/` | Adds 09:08 pre-open data for the 09:12 addendum |
+| `nse_public/README.md` | Says the NSE files are hand-made SHAPE SAMPLES (not downloaded, values fictional) to re-check on the owner's PC |
+| `nse_public/2026-10-01/` | Shape samples: `pre_open_nifty.json`, `option_chain_nifty.json`, `fii_dii_provisional.json` |
 
 ## `tests/constitution/` — proof of the rules
 
@@ -117,6 +120,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `../test_review_nits.py` | M8T review nits: a bare bot token ending in `-` is redacted whole; a cooling LATER part never holds back an earlier part (order still kept) |
 | `../test_b06_key_rotation.py` | B06: `senders rotate` re-keys every covered value in one transaction; re-run skips values under the new key; a value neither key opens aborts with nothing changed; refusals; keys never printed |
 
+| `tests/test_nse_public_adapter.py` | NSE adapter: parses each sample, maps to sourced facts, missing / malformed / stale = gap, refused at startup, no network imports, full R01-R15 report with gaps |
 | `tests/whatsapp_helpers.py` | Builds signed fake WhatsApp webhooks for tests |
 | `tests/constitution/test_e07_failures.py` | Worker crash, stale lease, feed/DB/budget failure, late and missed-deadline cases are all visible, never silent |
 | `tests/delivery_helpers.py` | Fake clock, quick tenants and worker setup for delivery tests |

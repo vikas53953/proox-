@@ -39,6 +39,8 @@ MAX_AGE: dict[DatasetKind, timedelta] = {
     DatasetKind.NEWS: timedelta(hours=18),
     DatasetKind.MACRO: timedelta(hours=20),
     DatasetKind.GIFT_NIFTY: timedelta(minutes=30),
+    # Indicative auction data must be from this pre-open (09:00-09:08 IST), never yesterday's.
+    DatasetKind.PRE_OPEN: timedelta(minutes=15),
 }
 GLOBAL_MAX_AGE = {"closed": timedelta(hours=20), "open": timedelta(minutes=30)}
 
@@ -57,6 +59,8 @@ class LensContext:
     datasets: dict[DatasetKind, Dataset | None]
     model: "ModelAdapter | None" = None
     results: dict[LensId, LensResult] = field(default_factory=dict)
+    # Why the feed returned no data for a dataset (malformed / missing file), if it said.
+    fetch_problems: dict[DatasetKind, str] = field(default_factory=dict)
 
     def ds(self, kind: DatasetKind) -> Dataset | None:
         ds = self.datasets.get(kind)
@@ -96,6 +100,11 @@ def missing(kind: DatasetKind, ctx: LensContext, effect: str = "") -> Gap:
     cap = ctx.capabilities.get(kind)
     if not cap.granted:
         reason = f"{kind.value}: not available under current feed rights ({cap.rights_note})"
+    elif kind in ctx.fetch_problems:
+        reason = (
+            f"{kind.value}: feed could not read data for {ctx.trading_date.isoformat()} "
+            f"({ctx.fetch_problems[kind]})"
+        )
     else:
         reason = f"{kind.value}: feed returned no data for {ctx.trading_date.isoformat()}"
     return Gap(topic=kind.value, data_class=DataClass.UNAVAILABLE, reason=reason, effect=effect)

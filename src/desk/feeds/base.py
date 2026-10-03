@@ -11,6 +11,9 @@ from typing import Any, Protocol
 
 from desk.core.facts import Source
 
+# Gap topic for unconfirmed usage terms; the only R15 gap repeated in the top-gaps list.
+TERMS_GAP_TOPIC = "data usage terms"
+
 
 class DatasetKind(StrEnum):
     NEWS = "news"
@@ -34,6 +37,9 @@ class Capability:
     granted: bool
     rights_note: str
     tier: str = ""  # e.g. depth "L1" / "L2-5-levels"; trades "with-aggressor" / "price-only"
+    # Non-empty = the data may be read, but its usage / redistribution / AI-use terms are
+    # not confirmed by the owner. R15 shows it as a gap and it is listed in the top gaps.
+    terms_unconfirmed: str = ""
 
 
 @dataclass(frozen=True)
@@ -62,3 +68,10 @@ class FeedAdapter(Protocol):
     def fetch(self, kind: DatasetKind, trading_date: date) -> Dataset | None:
         """Return the dataset, or None if the feed has nothing for it."""
         ...
+
+
+def fetch_problems(feed: object) -> dict["DatasetKind", str]:
+    """Why a feed returned None, per dataset, if it can say (optional `problems()`:
+    e.g. a malformed or missing file). Feeds without it (the fixture feed) report none."""
+    problems = getattr(feed, "problems", None)
+    return dict(problems()) if callable(problems) else {}

@@ -1,0 +1,86 @@
+{
+  "_comment": "SHAPE SAMPLE, hand-made, not downloaded from NSE, values fictional",
+  "declines": 1,
+  "unchanged": 0,
+  "advances": 1,
+  "data": [
+    {
+      "metadata": {
+        "symbol": "SAMPLE_BANK",
+        "identifier": "SAMPLE_BANKEQN",
+        "purpose": null,
+        "lastPrice": 1658,
+        "change": 8,
+        "pChange": 0.48,
+        "previousClose": 1650,
+        "finalQuantity": 12000,
+        "totalTurnover": 19896000,
+        "marketCap": 0,
+        "yearHigh": 1720,
+        "yearLow": 1410,
+        "iep": 1658
+      },
+      "detail": {
+        "preOpenMarket": {
+          "preopen": [
+            {"price": 1657.5, "buyQty": 0, "sellQty": 1200},
+            {"price": 1658, "buyQty": 5000, "sellQty": 0, "iep": true}
+          ],
+          "ataoBuy": 3000,
+          "ataoSell": 1000,
+          "IEP": 1658.00,
+          "totalTradedVolume": 12000,
+          "finalPrice": 1658,
+          "finalQuantity": 12000,
+          "lastUpdateTime": "01-Oct-2026 09:07:58",
+          "totalBuyQuantity": 95000,
+          "totalSellQuantity": 53000,
+          "atoBuyQty": 3000,
+          "atoSellQty": 1000,
+          "Change": 8,
+          "perChange": 0.48,
+          "prevClose": 1650
+        }
+      }
+    },
+    {
+      "metadata": {
+        "symbol": "SAMPLE_OIL",
+        "identifier": "SAMPLE_OILEQN",
+        "purpose": null,
+        "lastPrice": 1411.5,
+        "change": -8.5,
+        "pChange": -0.6,
+        "previousClose": 1420,
+        "finalQuantity": 8000,
+        "totalTurnover": 11292000,
+        "marketCap": 0,
+        "yearHigh": 1600,
+        "yearLow": 1250,
+        "iep": 1411.5
+      },
+      "detail": {
+        "preOpenMarket": {
+          "preopen": [
+            {"price": 1411.5, "buyQty": 2000, "sellQty": 0, "iep": true},
+            {"price": 1412, "buyQty": 0, "sellQty": 4000}
+          ],
+          "ataoBuy": 500,
+          "ataoSell": 2500,
+          "IEP": 1411.50,
+          "totalTradedVolume": 8000,
+          "finalPrice": 1411.5,
+          "finalQuantity": 8000,
+          "lastUpdateTime": "01-Oct-2026 09:07:58",
+          "totalBuyQuantity": 41000,
+          "totalSellQuantity": 59000,
+          "atoBuyQty": 500,
+          "atoSellQty": 2500,
+          "Change": -8.5,
+          "perChange": -0.6,
+          "prevClose": 1420
+        }
+      }
+    }
+  ]
+}
