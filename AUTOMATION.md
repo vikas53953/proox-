@@ -40,3 +40,13 @@ The workflow's `permissions:` block limits the workflow token. The official Clau
 App acts with its own installation permissions (Contents, Issues, Pull requests:
 read + write). Branch protection is therefore the real merge guardrail. A custom GitHub
 App with narrower permissions is possible if wanted (see the official docs).
+
+## Review notes (2026-10-03)
+
+- Owner: do not tag `@claude` on issues or PRs written by someone else, especially PRs from
+  forks. Their text and files (including `CLAUDE.md` and `.claude/` hooks) would reach a run
+  that holds the API key and the Claude App token.
+- Runs queue one at a time per issue/PR. GitHub keeps only one waiting run per group, so if
+  you send three mentions while one is running, the middle one is dropped. Send it again.
+- The workflow's own `GITHUB_TOKEN` is read-only and not saved in the checkout; the action
+  writes with the Claude GitHub App token.

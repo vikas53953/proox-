@@ -12,6 +12,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `PC-SESSION-CHECKLIST.md` | What to do on the owner's PC: pinned stack, Telegram Bot API pin, bot token, first live send |
 | `AUTOMATION.md` | How the @claude GitHub Action is used, its guardrails, and the owner-approval rule for merges |
 | `.github/workflows/claude.yml` | The GitHub Action itself (inactive until merged into `main`) |
+| `.github/workflows/ci.yml` | CI: full tests on Python 3.13.15 + PostgreSQL 17.11, plus ruff, on every PR and on `main` |
 | `BACKLOG.md` | Approved later items found during the build (B01 Muhurat report, B02 encrypt numbers — launch blocker) |
 | `implementation-notes.md` | Log of every deviation from the plan, one line each, with the reason |
 | `pyproject.toml` | Project settings: exact pins, test and lint settings |
