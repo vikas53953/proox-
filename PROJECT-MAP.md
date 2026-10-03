@@ -113,6 +113,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `test_d03_media.py` | Real pixel + PDF checks: 390 px preview, greyscale, opaque, labels, manifest, page X of Y, searchable text |
 | `test_e06_golden.py` | Maths gives the hand-checked answers; no peeking ahead; contradictions caught; no certainty words |
 | `../test_b02_sender_encryption.py` | B02: flag OFF = rows unchanged; flag ON = no plain wa_id / chat id in any table, onboarding + sends + receipts still work; bad key refuses; CLI migrates mixed rows; key never logged; downgrade refuses |
+| `../test_review_nits.py` | M8T review nits: a bare bot token ending in `-` is redacted whole; a cooling LATER part never holds back an earlier part (order still kept) |
 | `../test_b06_key_rotation.py` | B06: `senders rotate` re-keys every covered value in one transaction; re-run skips values under the new key; a value neither key opens aborts with nothing changed; refusals; keys never printed |
 
 | `tests/whatsapp_helpers.py` | Builds signed fake WhatsApp webhooks for tests |
