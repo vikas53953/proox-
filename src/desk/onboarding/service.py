@@ -151,6 +151,14 @@ def _only_greeting(text: str | None) -> bool:
     return rest == "" or rest in GREETINGS
 
 
+def _command(words: str) -> str:
+    return {"/STOP": "STOP", "/START": "START"}.get(words, words)  # Telegram commands
+
+
+def _stop(tenant: Tenant) -> None:
+    tenant.opt_in_state = "stopped"
+
+
 def _route(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime) -> str:
     if msg.provider_time > (tenant.last_inbound_at or msg.provider_time - timedelta(1)):
         tenant.last_inbound_at = msg.provider_time
@@ -161,9 +169,9 @@ def _route(session: Session, msg: InboundMessage, tenant: Tenant, now: datetime)
     words = (msg.text or "").strip().upper()
     if find_code(msg.text) and _only_greeting(msg.text):
         return "repeat_invite"  # already bound: no second welcome, no reply
-    words = {"/STOP": "STOP", "/START": "START"}.get(words, words)  # Telegram commands
+    words = _command(words)
     if words == "STOP":
-        tenant.opt_in_state = "stopped"
+        _stop(tenant)
         _queue(session, msg, tenant, "stop", msgs.STOP, now)
         return "stop"
     if words == "START":
@@ -336,6 +344,14 @@ def handle_message(
     if allows is not None and not allows(msg.sender):
         # Not on TELEGRAM_ALLOWED_CHAT_IDS: same neutral reply (and 24h limit) as a bad
         # invite; nothing is bound or consumed, an existing tenant is not routed.
+        # Exception: STOP from an existing tenant is honoured silently (stopping is always
+        # the safe direction; if the chat is re-added later it stays opted out). START is
+        # NOT honoured here.
+        tenant = _find_tenant(session, msg) if msg.type == "text" else None
+        if tenant is not None and _command((msg.text or "").strip().upper()) == "STOP":
+            _stop(tenant)
+            session.get(Inbound, msg.message_id).handled_as = "not_allowed"
+            return Outcome("not_allowed")
         handled = _neutral(session, msg, now).replace("not_bound", "not_allowed")
         session.get(Inbound, msg.message_id).handled_as = handled
         return Outcome(handled)
