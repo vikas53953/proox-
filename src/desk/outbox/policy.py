@@ -48,14 +48,27 @@ def ist_today(now: datetime) -> date:
 
 
 def decide(
-    session: Session, row: Outbox, tenant: Tenant | None, now: datetime, templates: TemplateRegistry
+    session: Session,
+    row: Outbox,
+    tenant: Tenant | None,
+    now: datetime,
+    templates: TemplateRegistry,
+    allowed_recipients: frozenset[str] | None = None,
 ) -> Decision:
-    """Rules common to every channel first (expiry, opt-in, today-only), then the
-    channel's own rules: a 24h service window and templates only where the channel has
-    them (WhatsApp). Telegram has neither, so an opted-in person can be messaged any time."""
+    """Rules common to every channel first (expiry, allowlist, opt-in, today-only), then
+    the channel's own rules: a 24h service window and templates only where the channel has
+    them (WhatsApp). Telegram has neither, so an opted-in person can be messaged any time.
+    `allowed_recipients` (B07, Telegram only; None = no restriction): a tenant's message to
+    anyone not on the list is cancelled. Untenanted neutral replies are not affected."""
     caps = CAPS.get(row.channel, WHATSAPP)
     if row.expires_at is not None and now >= row.expires_at:
         return Decision(Action.CANCEL, "expired: no longer useful after its time window")
+    if (
+        allowed_recipients is not None
+        and row.tenant_id is not None
+        and row.recipient not in allowed_recipients
+    ):
+        return Decision(Action.CANCEL, "recipient not on TELEGRAM_ALLOWED_CHAT_IDS")
     if not row.proactive:
         if caps.service_window is None:
             return Decision(Action.SEND_TEXT)
