@@ -1,6 +1,7 @@
 """Operator command: print a MOCK report as text.
 
 python -m desk report --scenario full_mock [--kind AUCTION] [--date 2026-10-01]
+python -m desk senders status|encrypt   (B02: transport ids at rest, operator only)
 """
 
 import argparse
@@ -15,6 +16,7 @@ from desk.lenses.context import ReportKind
 from desk.logsafe import install as install_log_redaction
 from desk.market_calendar import TradingCalendar
 from desk.onboarding.invites import create_invite
+from desk.pii import check_startup, configure_from
 from desk.pipeline import NoReport, run_report
 from desk.report.text import render_text
 
@@ -41,8 +43,13 @@ def main() -> None:
     srv.add_argument("--once", action="store_true")
     srv.add_argument("--interval", type=int, default=30, help="seconds between cycles")
     srv.add_argument("--auction", action="store_true", help="enable the 09:12 addendum")
+    snd = sub.add_parser("senders", help="B02: transport ids at rest (operator only)")
+    snd.add_argument("action", choices=["status", "encrypt"])
     args = parser.parse_args()
     install_log_redaction()
+    if args.cmd == "senders":
+        _senders(args)
+        return
     if args.cmd == "invite":
         _invite(args)
         return
@@ -82,11 +89,59 @@ def _write_media(report, out: Path) -> None:
         (out / f"{stem}-{c.name}.manifest.json").write_text(json.dumps(c.manifest, indent=2))
 
 
-def _factory():
-    settings = load_settings()
+def _factory(check: bool = True):
+    from desk.pii import SenderKeyError, SenderStateError
+
+    try:
+        settings = load_settings()
+        configure_from(settings)  # B02: once, before any DB access
+    except SenderKeyError as exc:
+        raise SystemExit(f"refusing to start: {exc}") from None
     if not settings.database_url:
         raise SystemExit("DESK_DATABASE_URL is not set")
-    return settings, make_session_factory(make_engine(settings.database_url))
+    factory = make_session_factory(make_engine(settings.database_url))
+    if check:
+        try:
+            with factory() as s:
+                check_startup(s)
+        except SenderStateError as exc:
+            raise SystemExit(f"refusing to start: {exc}") from None
+    return settings, factory
+
+
+def _senders(args: argparse.Namespace) -> None:
+    """status: plaintext / encrypted row counts per covered column (mixed = flagged).
+    encrypt: rewrite every plaintext transport id, all tables in ONE transaction;
+    idempotent; refused unless DESK_ENCRYPT_SENDERS=1 with a valid DESK_SENDER_KEY."""
+    from sqlalchemy.exc import IntegrityError
+
+    from desk.pii import enabled, encrypt_existing, storage_state
+
+    _, factory = _factory(check=False)
+    with factory() as s:
+        if args.action == "encrypt":
+            if not enabled():
+                raise SystemExit("refusing: set DESK_ENCRYPT_SENDERS=1 and DESK_SENDER_KEY")
+            try:
+                changed = encrypt_existing(s)
+                s.commit()
+            except IntegrityError:
+                s.rollback()
+                raise SystemExit(
+                    "refusing: the same id is stored both plain and encrypted in a unique "
+                    "column; nothing was changed (resolve those rows first)"
+                ) from None
+            print(f"encrypted {sum(changed.values())} values; nothing else changed")
+        state = storage_state(s)
+    plain = sum(p for p, _ in state.values())
+    enc = sum(e for _, e in state.values())
+    for (table, col), (p, e) in state.items():
+        print(f"{table}.{col}: plain={p} encrypted={e}")
+    flag = "ON" if enabled() else "OFF"
+    mixed = (enabled() and plain) or (not enabled() and enc)
+    print(f"flag {flag}; " + ("MISMATCH: rows do not match the flag" if mixed else "consistent"))
+    if mixed:
+        raise SystemExit(1)
 
 
 def _invite(args: argparse.Namespace) -> None:
