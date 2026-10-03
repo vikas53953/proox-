@@ -6,6 +6,7 @@ Secret fields are excluded from repr so they cannot leak into logs (RC08).
 """
 
 import os
+import re
 from dataclasses import dataclass, field
 
 from desk.pii import SenderKeyError, parse_key
@@ -19,6 +20,10 @@ GRAPH_API_VERSION = "v26.0"  # pinned in Technical spec v1.3; not configurable
 
 class GateBlockedError(RuntimeError):
     """Raised when config asks for something an open gate (G01-G06) has not cleared."""
+
+
+class SettingsError(ValueError):
+    """A setting has a value we cannot read; startup is refused with a clear message."""
 
 
 @dataclass(frozen=True)
@@ -52,6 +57,9 @@ class TelegramSettings:
     bot_token: str = field(default="", repr=False)
     bot_username: str = ""
     live: bool = False  # DESK_TELEGRAM_LIVE=1: real api.telegram.org (owner PC only)
+    # B07: TELEGRAM_ALLOWED_CHAT_IDS. None = unset = no restriction (today's behaviour).
+    # Set: only these chat ids may bind an invite, be handled or receive tenant messages.
+    allowed_chat_ids: frozenset[str] | None = None
 
     @property
     def bot_id(self) -> str:
@@ -60,6 +68,10 @@ class TelegramSettings:
 
     def accepts(self, msg) -> bool:
         return getattr(msg, "channel", "") == "telegram" and msg.phone_number_id == self.bot_id
+
+    def allows(self, chat_id: str) -> bool:
+        """B07 allowlist check; always True while TELEGRAM_ALLOWED_CHAT_IDS is unset."""
+        return self.allowed_chat_ids is None or str(chat_id) in self.allowed_chat_ids
 
 
 @dataclass(frozen=True)
@@ -112,9 +124,29 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
             bot_token=env.get("TELEGRAM_BOT_TOKEN", ""),
             bot_username=env.get("TELEGRAM_BOT_USERNAME", ""),
             live=env.get("DESK_TELEGRAM_LIVE", "") == "1",
+            allowed_chat_ids=parse_chat_ids(env.get("TELEGRAM_ALLOWED_CHAT_IDS", "")),
         ),
         senders=_sender_crypto(env),
     )
+
+
+_CHAT_ID = re.compile(r"-?[0-9]{1,19}")
+
+
+def parse_chat_ids(raw: str) -> frozenset[str] | None:
+    """B07: "111, 222" -> {"111", "222"}; empty/unset -> None (no restriction).
+    Anything else (non-integers, or only commas) refuses to start: a typo must never
+    silently turn the allowlist off."""
+    if not raw.strip():
+        return None
+    ids = [part.strip() for part in raw.split(",")]
+    bad = [i for i in ids if i and not _CHAT_ID.fullmatch(i)]
+    if bad or not any(ids):
+        raise SettingsError(
+            "TELEGRAM_ALLOWED_CHAT_IDS must be comma-separated integer chat ids "
+            "(e.g. 123456789,987654321) or empty"
+        )
+    return frozenset(str(int(i)) for i in ids if i)
 
 
 def _sender_crypto(env: dict[str, str]) -> SenderCryptoSettings:

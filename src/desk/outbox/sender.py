@@ -190,7 +190,8 @@ def send_batch(
                 stats.add("HELD")
                 continue
             tenant = s.get(Tenant, row.tenant_id) if row.tenant_id else None
-            decision = decide(s, row, tenant, now, templates)
+            allowed = getattr(transport, "allowed_recipients", None)  # B07 (Telegram)
+            decision = decide(s, row, tenant, now, templates, allowed)
             if decision.action is Action.CANCEL:
                 row.state, row.error, row.last_status_at = "CANCELLED", decision.reason, now
             elif decision.action is Action.WAIT:

@@ -125,9 +125,15 @@ class TelegramClient:
 class TelegramTransport:
     caps = TELEGRAM
 
-    def __init__(self, client: TelegramClient, bot_id: str) -> None:
+    def __init__(
+        self,
+        client: TelegramClient,
+        bot_id: str,
+        allowed_recipients: frozenset[str] | None = None,
+    ) -> None:
         self.client = client
         self.endpoint = str(bot_id)  # sends only rows of THIS bot (HIGH-1/HIGH-2)
+        self.allowed_recipients = allowed_recipients  # B07; None = no restriction
 
     def send_text(self, to: str, body: str, ref: str) -> Outcome:
         return self.client.send(
@@ -261,7 +267,9 @@ def make_telegram_transport(settings) -> "tuple[TelegramTransport, TelegramClien
                 "TELEGRAM_BOT_TOKEN is set but DESK_TELEGRAM_LIVE is not 1: refusing the "
                 "in-memory fake. Unset the token for mock runs, or set DESK_TELEGRAM_LIVE=1."
             )
-        return FakeTelegram().transport()
+        transport, client = FakeTelegram().transport()
+        transport.allowed_recipients = tg.allowed_chat_ids
+        return transport, client
     if not tg.bot_token:
         raise GateBlockedError("DESK_TELEGRAM_LIVE=1 but TELEGRAM_BOT_TOKEN is not set")
     if not TELEGRAM_BOT_API_VERSION:
@@ -269,4 +277,4 @@ def make_telegram_transport(settings) -> "tuple[TelegramTransport, TelegramClien
             "pin the Telegram Bot API version first (BOM.md, PC-SESSION-CHECKLIST.md step 2)"
         )
     client = TelegramClient(httpx.Client(), tg.bot_token)
-    return TelegramTransport(client, tg.bot_id), client
+    return TelegramTransport(client, tg.bot_id, tg.allowed_chat_ids), client

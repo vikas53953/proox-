@@ -46,6 +46,7 @@ test (owner only) happen without waiting for G02.
 | Invite: deep link `t.me/<bot>?start=<code>`, single use, max 24 h | approved |
 | B02 encryption at rest covers Telegram ids | approved (with B02) |
 | **Before any user other than the owner:** an invite pre-binding rule for Telegram, and a privacy disclosure (Telegram bot chats are not end-to-end encrypted; Telegram stores them) | **required, not built** |
+| Optional chat-id allowlist (`TELEGRAM_ALLOWED_CHAT_IDS`, B07): when set, other chats cannot bind an invite (neutral reply, invite not consumed); existing Telegram tenants not on the list are not handled and get no messages (checked right before each send); invalid values refuse to start | built, unset by default; owner to decide default |
 | Delivery truth: Telegram reports no delivery/read receipts — SENT is final; timeouts stay UNKNOWN (no reconcile) | built |
 | Fake vs live: with a token set, the in-memory fake refuses to start (it could otherwise mark a real bot's rows SENT); each transport sends only rows of its own bot / phone id | built (security review HIGH-1/2) |
 | **STOP cutoff:** STOP applies to every message whose send decision is made after the STOP is committed. Consent is checked per message right before its send; a message already handed to Telegram when STOP arrives completes, every later part is cancelled. So a STOP during a report can still let at most the part in flight through | built, tested (MED-7) |
