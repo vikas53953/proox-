@@ -34,3 +34,31 @@ NEUTRAL = (
 NO_REPORT_TODAY = "Aaj ka report abhi tak nahi bana. Purana report aaj ka bata kar nahi bhejenge."
 
 PENDING_REASON = "model access aur market-data rights abhi decide nahi hue (G01, G03)"
+
+# ---- DRAFT: Telegram privacy disclosure (GATES.md T1) ------------------------------------
+# STATUS: DRAFT — wording NOT approved. The owner must approve it before any user other
+# than the owner is invited on Telegram. Sent only when TELEGRAM_PRIVACY_NOTICE=1 (off by
+# default), once per tenant, right after the Telegram welcome. Roman Hinglish first.
+PRIVACY_NOTICE_STATUS = "DRAFT"
+PRIVACY_NOTICE_TELEGRAM_DRAFT = (
+    "Privacy: Telegram bot chats end-to-end encrypted nahi hote, aur Telegram unhe apne "
+    "servers par store karta hai. {stored_hi} Kabhi bhi STOP likho, daily updates ruk "
+    "jayenge.\n"
+    "Privacy: Telegram bot chats are not end-to-end encrypted, and Telegram stores them on "
+    "its servers. {stored_en} Reply STOP anytime to pause daily updates."
+)
+# The chat-id sentence depends on B02 (DESK_ENCRYPT_SENDERS): never claim encryption when
+# it is off.
+PRIVACY_STORED_ENCRYPTED = (
+    "Desk aapka chat id encrypted form mein store karta hai.",
+    "The desk stores your chat id encrypted.",
+)
+PRIVACY_STORED_PLAIN = (
+    "Desk aapka chat id store karta hai taaki brief bhej sake.",
+    "The desk stores your chat id so it can send you the brief.",
+)
+
+
+def privacy_notice_telegram(encrypted: bool) -> str:
+    hi, en = PRIVACY_STORED_ENCRYPTED if encrypted else PRIVACY_STORED_PLAIN
+    return PRIVACY_NOTICE_TELEGRAM_DRAFT.format(stored_hi=hi, stored_en=en)
