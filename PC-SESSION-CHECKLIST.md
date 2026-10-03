@@ -30,7 +30,55 @@ there). Do them in this order; stop at the first failure and report it.
       in @BotFather (/revoke) and make a new one.
 - [ ] `pytest tests/constitution -k secret` passes (the scan flags token-shaped strings).
 
-## 4. First live Telegram send
+## 4. Safety settings (added 2026-10-03) — before the first live send
+
+Do these before step 5. Each one is OFF or empty unless you set it.
+
+### 4a. Mock mode: keep the WhatsApp token empty (B08)
+
+- [ ] Do not set `WHATSAPP_ACCESS_TOKEN` on this PC. WhatsApp is mock only (G02).
+      If it is set, `serve` stops with "refusing to start". Clear it and start again.
+- [ ] If `WHATSAPP_PHONE_NUMBER_ID` is set, `serve` prints a note. Its messages stay
+      queued. Nothing goes to WhatsApp.
+
+### 4b. Encrypt chat ids and phone numbers at rest (B02)
+
+- [ ] Make a key on this PC (it prints 86 characters):
+      `python -c "import secrets; print(secrets.token_urlsafe(64))"`
+- [ ] Keep the key only in an environment variable: `DESK_SENDER_KEY=<key>`.
+      Also set `DESK_ENCRYPT_SENDERS=1`. Never paste the key into code, chat, logs,
+      commits or screenshots.
+- [ ] Keep one safe copy (for example a password manager). If you lose the key, the
+      desk cannot read the stored ids again.
+- [ ] Stop `serve`. Run `python -m desk senders status`.
+      "MISMATCH" is normal here if the database already has plain ids.
+- [ ] Run `python -m desk senders encrypt`. Then run `python -m desk senders status`
+      again. It must show `plain=0` on every line and "consistent".
+- [ ] `serve` refuses to start while the rows and the flag do not match. That is correct.
+- [ ] Later: move the key into the G05 key store. B02 stays a launch blocker until then.
+
+To change the key (rotation, B06):
+
+- [ ] Stop `serve`. Make a new key with the same command.
+- [ ] Set `DESK_SENDER_KEY_NEW=<new key>`. Keep `DESK_SENDER_KEY` as the old key.
+- [ ] Run `python -m desk senders rotate`. It changes all rows in one step. If it stops
+      with "refusing", nothing changed.
+- [ ] Set `DESK_SENDER_KEY` to the new key. Clear `DESK_SENDER_KEY_NEW`.
+- [ ] Run `python -m desk senders status`. It must show "consistent".
+
+### 4c. Only your own Telegram chat (B07)
+
+- [ ] Stop `serve`. Send any message (for example "hi") to your bot from your phone.
+- [ ] Read your chat id from the bot's first update. The token stays in the environment
+      variable, not in the command text:
+      `python -c "import json,os,urllib.request; print([u['message']['chat']['id'] for u in json.load(urllib.request.urlopen('https://api.telegram.org/bot'+os.environ['TELEGRAM_BOT_TOKEN']+'/getUpdates'))['result'] if 'message' in u])"`
+- [ ] The number in the list is your chat id. If the list is empty, `serve` already read
+      your message: send a new one while `serve` is stopped, then run the command again.
+- [ ] Set `TELEGRAM_ALLOWED_CHAT_IDS=<your chat id>` (more ids: separate with commas).
+      Other chats then get only the neutral "invite not valid" reply.
+- [ ] A wrong value (letters, only commas) makes `serve` refuse to start. Fix the value.
+
+## 5. First live Telegram send
 
 - [ ] `DESK_TELEGRAM_LIVE=1`; the startup check (`getMe`) succeeds.
 - [ ] Only ONE `serve` per bot (a second poller gets 409 and `serve` stops).

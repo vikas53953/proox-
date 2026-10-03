@@ -9,7 +9,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `README.md` | One-page intro, how to run tests and print a mock report |
 | `BOM.md` | The exact versions we are allowed to use, and which are blocked |
 | `GATES.md` | The six open owner decisions (G01–G06) and the mock used meanwhile |
-| `PC-SESSION-CHECKLIST.md` | What to do on the owner's PC: pinned stack, Telegram Bot API pin, bot token, first live send |
+| `PC-SESSION-CHECKLIST.md` | What to do on the owner's PC: pinned stack, Telegram Bot API pin, bot token, safety settings (B08 mock token, B02 key + encrypt + rotate, B07 own chat id), first live send |
 | `AUTOMATION.md` | How the @claude GitHub Action is used, its guardrails, and the owner-approval rule for merges |
 | `.github/workflows/claude.yml` | The GitHub Action itself (inactive until merged into `main`) |
 | `.github/workflows/ci.yml` | CI: full tests on Python 3.13.15 + PostgreSQL 17.11, plus ruff, on every PR and on `main` |
