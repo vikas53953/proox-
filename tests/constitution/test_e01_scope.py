@@ -299,3 +299,20 @@ def test_secret_scan_still_sees_tokens_next_to_embedded_media():
 def test_secret_scan_flags_a_telegram_bot_token():
     fake = "1234567890:" + "AAH" + "x" * 32  # token-shaped, built at runtime, not a real one
     assert any(p.search(f"TELEGRAM_BOT_TOKEN={fake}") for p in SECRET_PATTERNS)
+
+
+def test_github_workflows_pin_actions_and_keep_owner_only_trigger(repo_root):
+    """RC12 for automation: every `uses:` is a full commit SHA; the Claude workflow can only
+    be triggered by the repo owner and only reads the one expected secret."""
+    workflows = sorted((repo_root / ".github" / "workflows").glob("*.y*ml"))
+    for wf in workflows:
+        text = wf.read_text()
+        for ref in re.findall(r"uses:\s*([^\s#]+)", text):
+            assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", ref), f"{wf.name}: {ref}"
+        secrets = set(re.findall(r"secrets\.([A-Z_]+)", text))
+        assert secrets <= {"ANTHROPIC_API_KEY"}, f"{wf.name}: unexpected secrets {secrets}"
+    claude = repo_root / ".github" / "workflows" / "claude.yml"
+    if claude.exists():
+        text = claude.read_text()
+        assert "github.actor == github.repository_owner" in text
+        assert "--model claude-opus-5-5" in text
