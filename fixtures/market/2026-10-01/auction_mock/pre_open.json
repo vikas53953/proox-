@@ -1,0 +1,22 @@
+{
+  "kind": "pre_open",
+  "source": {
+    "id": "mock-pre_open",
+    "name": "MOCK feed: pre_open",
+    "url": "https://example.invalid/mock/pre_open",
+    "is_mock": true
+  },
+  "as_of": "2026-10-01T09:08:00+05:30",
+  "records": [
+    {
+      "instrument": "MOCKBANK_A",
+      "iep": "1658.00",
+      "imbalance_qty": "42000"
+    },
+    {
+      "instrument": "MOCKOIL_C",
+      "iep": "1411.50",
+      "imbalance_qty": "-18000"
+    }
+  ]
+}

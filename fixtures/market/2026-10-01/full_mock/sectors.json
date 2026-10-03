@@ -1,0 +1,43 @@
+{
+  "kind": "sectors",
+  "source": {
+    "id": "mock-sectors",
+    "name": "MOCK feed: sectors",
+    "url": "https://example.invalid/mock/sectors",
+    "is_mock": true
+  },
+  "as_of": "2026-09-30T15:30:00+05:30",
+  "records": [
+    {
+      "sector": "Banks",
+      "return_pct": "0.82",
+      "advances": 9,
+      "declines": 3,
+      "weight_pct": "35.10"
+    },
+    {
+      "sector": "IT",
+      "return_pct": "-0.35",
+      "advances": 3,
+      "declines": 7,
+      "weight_pct": "12.40"
+    },
+    {
+      "sector": "Energy",
+      "return_pct": "0.10",
+      "advances": 4,
+      "declines": 4,
+      "weight_pct": "11.20"
+    },
+    {
+      "sector": "Auto",
+      "return_pct": "1.05",
+      "advances": 11,
+      "declines": 4,
+      "weight_pct": "7.30"
+    }
+  ],
+  "meta": {
+    "index_return_pct": "0.48"
+  }
+}

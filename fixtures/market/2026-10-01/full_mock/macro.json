@@ -1,0 +1,51 @@
+{
+  "kind": "macro",
+  "source": {
+    "id": "mock-macro",
+    "name": "MOCK feed: macro",
+    "url": "https://example.invalid/mock/macro",
+    "is_mock": true
+  },
+  "as_of": "2026-10-01T07:00:00+05:30",
+  "records": [
+    {
+      "label": "Brent crude front month",
+      "instrument": "BRENT (MOCK)",
+      "value": "68.40",
+      "unit": "USD/bbl"
+    },
+    {
+      "label": "WTI crude front month",
+      "instrument": "WTI (MOCK)",
+      "value": "64.90",
+      "unit": "USD/bbl"
+    },
+    {
+      "label": "USD/INR reference",
+      "instrument": "USDINR (MOCK)",
+      "value": "88.12",
+      "unit": "INR per USD"
+    },
+    {
+      "label": "US 10Y yield",
+      "instrument": "UST10Y (MOCK)",
+      "value": "4.11",
+      "unit": "%"
+    }
+  ],
+  "meta": {
+    "events": [
+      {
+        "name": "US mock data release",
+        "time_ist": "18:00",
+        "region": "US"
+      }
+    ],
+    "transmission": [
+      {
+        "path": "Higher crude -> oil marketer margins and INR pressure",
+        "contrary": "Brent move overnight was small; INR reference steady"
+      }
+    ]
+  }
+}

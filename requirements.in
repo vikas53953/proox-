@@ -1,0 +1,13 @@
+# Runtime direct pins — copied verbatim from Technical spec v1.3 "Pinned BOM".
+# No substitutions. Changing a line here requires an owner decision (RC12).
+fastapi==0.142.2
+pydantic==2.13.5
+sqlalchemy==2.1.1
+alembic==1.20.0
+psycopg==3.3.6
+httpx==0.28.1
+uvicorn==0.54.0
+matplotlib==3.11.2
+reportlab==5.0.1
+cryptography==50.0.2
+Pillow==12.3.0

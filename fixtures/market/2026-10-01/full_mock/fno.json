@@ -1,0 +1,36 @@
+{
+  "kind": "fno",
+  "source": {
+    "id": "mock-fno",
+    "name": "MOCK feed: fno",
+    "url": "https://example.invalid/mock/fno",
+    "is_mock": true
+  },
+  "as_of": "2026-09-30T18:00:00+05:30",
+  "records": [
+    {
+      "contract": "NIFTY OCT FUT (MOCK)",
+      "expiry": "2026-10-27",
+      "oi": "15000000",
+      "prev_oi": "14250000",
+      "settle": "25165",
+      "underlying_is_index_spot": true
+    }
+  ],
+  "meta": {
+    "spot_close": "25120",
+    "ban_list": [
+      "MOCKSTOCK_Q"
+    ],
+    "participant_oi": [
+      {
+        "participant": "FII",
+        "net_contracts": "-120000"
+      },
+      {
+        "participant": "Client",
+        "net_contracts": "85000"
+      }
+    ]
+  }
+}

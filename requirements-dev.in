@@ -1,0 +1,6 @@
+# Dev/test direct pins — copied verbatim from Technical spec v1.3 "Pinned BOM".
+-r requirements.in
+pytest==9.1.1
+pytest-asyncio==1.4.0
+hypothesis==6.168.3
+ruff==0.16.9

@@ -1,0 +1,10 @@
+{
+  "version": "drafts-2026-10-01",
+  "note": "Design doc v1.0 drafts. NOT submitted to Meta (G02 BLOCKED). Category is set by Meta on approval; never assumed.",
+  "templates": [
+    {"name": "report_ready_v1", "language": "en", "category": "UNASSIGNED", "status": "DRAFT",
+     "purpose": "report_ready"},
+    {"name": "daily_opt_in_v1", "language": "en", "category": "UNASSIGNED", "status": "DRAFT",
+     "purpose": "opt_in"}
+  ]
+}

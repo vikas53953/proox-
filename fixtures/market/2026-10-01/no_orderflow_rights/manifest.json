@@ -1,0 +1,11 @@
+{
+  "is_mock": true,
+  "note": "MOCK. Feed has no trade-event rights.",
+  "base": "full_mock",
+  "capabilities": {
+    "trades": {
+      "granted": false,
+      "rights_note": "no licensed trade-event feed (G03)"
+    }
+  }
+}

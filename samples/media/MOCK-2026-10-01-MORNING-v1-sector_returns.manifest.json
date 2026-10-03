@@ -1,0 +1,69 @@
+{
+  "chart": "sector_returns",
+  "title": "Sector returns, prior session",
+  "lens": "R04",
+  "chart_version": "chart-hbar-v1",
+  "renderer": "matplotlib 3.11.2",
+  "font": "FONT: PLACEHOLDER (Matplotlib DejaVu Sans; Noto BLOCKED)",
+  "report_id": "MOCK-2026-10-01-MORNING",
+  "report_version": 1,
+  "report_hash": "11106b823c7052f4206c45e6e977ff9c9a86f8862d03ddc856063daf9393f54b",
+  "inputs": [
+    {
+      "label": "IT return",
+      "value": "-0.35",
+      "unit": "%",
+      "instrument": "NIFTY IT (sector index)",
+      "source_id": "mock-sectors",
+      "source_url": "https://example.invalid/mock/sectors",
+      "as_of": "2026-09-30T10:00:00+00:00",
+      "data_class": "PRIOR SESSION"
+    },
+    {
+      "label": "Energy return",
+      "value": "0.10",
+      "unit": "%",
+      "instrument": "NIFTY ENERGY (sector index)",
+      "source_id": "mock-sectors",
+      "source_url": "https://example.invalid/mock/sectors",
+      "as_of": "2026-09-30T10:00:00+00:00",
+      "data_class": "PRIOR SESSION"
+    },
+    {
+      "label": "Banks return",
+      "value": "0.82",
+      "unit": "%",
+      "instrument": "NIFTY BANKS (sector index)",
+      "source_id": "mock-sectors",
+      "source_url": "https://example.invalid/mock/sectors",
+      "as_of": "2026-09-30T10:00:00+00:00",
+      "data_class": "PRIOR SESSION"
+    },
+    {
+      "label": "Auto return",
+      "value": "1.05",
+      "unit": "%",
+      "instrument": "NIFTY AUTO (sector index)",
+      "source_id": "mock-sectors",
+      "source_url": "https://example.invalid/mock/sectors",
+      "as_of": "2026-09-30T10:00:00+00:00",
+      "data_class": "PRIOR SESSION"
+    }
+  ],
+  "inputs_sha256": "a369e7692b75e4c188271aca060d018704620ac81b0c582343c2b677bd26470a",
+  "png_sha256": "3d509a0e70a6f1f79a3869d7beab81813175c4d712ab377baa63029f1d1213da",
+  "size_px": [
+    1080,
+    1040
+  ],
+  "min_text_px": 24,
+  "palette": {
+    "surface": "#FFFFFF",
+    "marks": "#244A63",
+    "text": "#172B3A",
+    "secondary": "#52616B"
+  },
+  "is_mock": true,
+  "alt_text": "Chart (MOCK): Sector returns, prior session, %. IT \u22120.35% down, Energy +0.10% up, Banks +0.82% up, Auto +1.05% up. Source: MOCK feed: sectors (https://example.invalid/mock/sectors). As of 30 Sep 2026 15:30 IST.",
+  "layout_problems": []
+}

@@ -1,0 +1,236 @@
+MOCK — synthetic values, not market data
+RESEARCH | India pre-market | 01 Oct 2026 | As of 01 Oct 2026 09:12 IST | Report MOCK-2026-10-01-AUCTION v1
+Status: DEGRADED
+
+SESSION PATHS (conditional, not predictions):
+Levels on NIFTY OCT FUT (MOCK) unless marked.
+- BASE: Trade holds between VAL 25060 and VAH 25200 after 09:15. Invalid if: sustained trade outside VAL-VAH. Confidence: low.
+- UP: Acceptance above VAH 25200, then above prior high 25180 [NIFTY 50 (MOCK)]. Invalid if: back below VAH 25200. Confidence: low.
+- DOWN: Acceptance below VAL 25060, then below prior low 24960 [NIFTY 50 (MOCK)]. Invalid if: back above VAL 25060. Confidence: low.
+- Contrary evidence: CONTRADICTION on MOCKBANK_A: positive per o1; negative per o2
+
+DATA GAPS:
+- Global: stale. Nikkei 225, MOCK last update 0h32m before cutoff. Affects R02.
+- GIFT Nifty: unavailable. Not licensed in current feed, gate G03. Affects R02, R12.
+- Margin financing: unavailable. No sourced margin-financing data in current feed. Affects R10.
+
+R01 Overnight news — COMPLETE
+- [FACT] MOCKBANK_A Q2 business update: Deposits up vs last quarter (mock) text [OVERNIGHT] — MOCKBANK_A; MOCK Exchange filing, as of 30 Sep 2026 19:00 IST (credibility high)
+- [RUMOR] Talk of MOCKBANK_A block sale: Unconfirmed report of a large block sale text [OVERNIGHT] — MOCKBANK_A; MOCK Market blog, as of 30 Sep 2026 22:00 IST (credibility low)
+- [INTERPRETATION] Analyst view: MOCKIT_B demand stable: Opinion, no new data text [OVERNIGHT] — MOCKIT_B; MOCK Broker research note, as of 01 Oct 2026 06:30 IST (credibility medium)
+- [FACT] MOCKOIL_C unit shutdown for maintenance: One refinery unit offline for 10 days (mock) text [OVERNIGHT] — MOCKOIL_C; MOCK Company press release, as of 01 Oct 2026 07:10 IST (credibility high)
+- Note: MOCKBANK_A Q2 business update -> sectors: Banks
+- Note: Talk of MOCKBANK_A block sale -> sectors: Banks
+- Note: Analyst view: MOCKIT_B demand stable -> sectors: IT
+- Note: MOCKOIL_C unit shutdown for maintenance -> sectors: Energy
+- Uncertainty: Rumors and interpretations are not confirmed facts.
+
+R02 US / Asia / global futures — DEGRADED
+- S&P 500 (MOCK) (cash index, US, CLOSED) last: 6510.20 points [OVERNIGHT] — S&P 500 (MOCK); MOCK feed: global, as of 01 Oct 2026 01:30 IST (delay 0 min)
+- S&P 500 (MOCK) (cash index, US, CLOSED) change vs prev close: 0.47 % [DERIVED] — S&P 500 (MOCK); MOCK feed: global, as of 01 Oct 2026 01:30 IST
+- Nasdaq 100 (MOCK) (cash index, US, CLOSED) last: 23850.00 points [OVERNIGHT] — Nasdaq 100 (MOCK); MOCK feed: global, as of 01 Oct 2026 01:30 IST (delay 0 min)
+- Nasdaq 100 (MOCK) (cash index, US, CLOSED) change vs prev close: -0.21 % [DERIVED] — Nasdaq 100 (MOCK); MOCK feed: global, as of 01 Oct 2026 01:30 IST
+2 items: STALE unless marked | as of 01 Oct 2026 08:40 IST | MOCK feed: global | Nikkei 225 (MOCK) | Nikkei 225 (MOCK) last update 0h32m before cutoff; delay 15 min
+- Nikkei 225 (MOCK) (cash index, JP, OPEN) last: 44120.00 points
+- Nikkei 225 (MOCK) (cash index, JP, OPEN) change vs prev close: 0.27 %
+- GAP global: STALE — Nikkei 225, MOCK last update 0h32m before cutoff. Effect: cue may be outdated
+- GAP GIFT Nifty: UNAVAILABLE — Not licensed in current feed, gate G03. Effect: no licensed GIFT Nifty cue
+- Note: A global cue is not a certain Indian opening prediction.
+
+R03 Oil / macro — COMPLETE
+5 items: OVERNIGHT unless marked | as of 01 Oct 2026 07:00 IST | MOCK feed: macro
+- Brent crude front month: 68.40 USD/bbl — BRENT (MOCK)
+- WTI crude front month: 64.90 USD/bbl — WTI (MOCK)
+- USD/INR reference: 88.12 INR per USD — USDINR (MOCK)
+- US 10Y yield: 4.11 % — UST10Y (MOCK)
+- Scheduled: US mock data release: 18:00 IST time
+- Note: Path: Higher crude -> oil marketer margins and INR pressure | Contrary: Brent move overnight was small; INR reference steady
+- Uncertainty: Transmission paths are plausible channels, not causation.
+
+R04 Sector map — COMPLETE
+16 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: sectors
+- Auto return: 1.05 % — NIFTY AUTO (sector index)
+- Auto vs Nifty 50: 0.57 % points [DERIVED] — NIFTY AUTO (sector index)
+- Auto breadth (adv/dec): 11/4 count — NIFTY AUTO (sector index)
+- Auto weight in Nifty 50: 7.30 % — NIFTY AUTO (sector index)
+- Banks return: 0.82 % — NIFTY BANKS (sector index)
+- Banks vs Nifty 50: 0.34 % points [DERIVED] — NIFTY BANKS (sector index)
+- Banks breadth (adv/dec): 9/3 count — NIFTY BANKS (sector index)
+- Banks weight in Nifty 50: 35.10 % — NIFTY BANKS (sector index)
+- Energy return: 0.10 % — NIFTY ENERGY (sector index)
+- Energy vs Nifty 50: -0.38 % points [DERIVED] — NIFTY ENERGY (sector index)
+- Energy breadth (adv/dec): 4/4 count — NIFTY ENERGY (sector index)
+- Energy weight in Nifty 50: 11.20 % — NIFTY ENERGY (sector index)
+- IT return: -0.35 % — NIFTY IT (sector index)
+- IT vs Nifty 50: -0.83 % points [DERIVED] — NIFTY IT (sector index)
+- IT breadth (adv/dec): 3/7 count — NIFTY IT (sector index)
+- IT weight in Nifty 50: 12.40 % — NIFTY IT (sector index)
+- GAP today's sector returns: NOT APPLICABLE — Cash market opens 09:15 IST; no intraday sector returns exist yet
+
+R05 Large-cap focus — COMPLETE
+4 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: stocks | MOCKBANK_A
+- MOCKBANK_A prior close: 1650.00 INR
+- MOCKBANK_A prior high: 1662.00 INR
+- MOCKBANK_A prior low: 1631.50 INR
+- MOCKBANK_A Nifty weight: 12.50 %
+- MOCKBANK_A catalyst (business update): Q2 business update filed text [OVERNIGHT] — MOCKBANK_A; MOCK Exchange filing, as of 30 Sep 2026 19:00 IST
+4 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: stocks | MOCKOIL_C
+- MOCKOIL_C prior close: 1420.00 INR
+- MOCKOIL_C prior high: 1431.00 INR
+- MOCKOIL_C prior low: 1405.00 INR
+- MOCKOIL_C Nifty weight: 9.40 %
+- MOCKOIL_C catalyst (operations): Refinery unit maintenance shutdown text [OVERNIGHT] — MOCKOIL_C; MOCK Company press release, as of 01 Oct 2026 07:10 IST
+4 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: stocks | MOCKIT_B
+- MOCKIT_B prior close: 3560.00 INR
+- MOCKIT_B prior high: 3590.00 INR
+- MOCKIT_B prior low: 3541.00 INR
+- MOCKIT_B Nifty weight: 8.10 %
+- MOCKIT_B catalyst (analyst note): Demand view reiterated text [OVERNIGHT] — MOCKIT_B; MOCK Broker research note, as of 01 Oct 2026 06:30 IST
+- Note: MOCKBANK_A: shortlisted — 1 catalyst(s), weight 12.50%. Invalidation reference: prior low 1631.50 / prior high 1662.00 (reference levels, not targets).
+- Note: MOCKOIL_C: shortlisted — 1 catalyst(s), weight 9.40%. Invalidation reference: prior low 1405.00 / prior high 1431.00 (reference levels, not targets).
+- Note: MOCKIT_B: shortlisted — 1 catalyst(s), weight 8.10%. Invalidation reference: prior low 3541.00 / prior high 3590.00 (reference levels, not targets).
+- Note: Scanned 6 names; 3 shortlisted (capacity 5); 3 without material catalyst.
+
+R06 Price action — COMPLETE
+3 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: index_bars | NIFTY 50 (MOCK)
+- Prior session high: 25180 points
+- Prior session low: 24960 points
+- Prior session close: 25120 points
+2 items: DERIVED unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: index_bars | NIFTY 50 (MOCK) | method levels-v1
+- Prior session range: 220 points
+- Close location in range (0=low, 1=high): 0.73 ratio
+- Prior session volume (futures proxy): 530000 contracts [PROXY] — NIFTY OCT FUT (MOCK); MOCK feed: fut_bars, as of 30 Sep 2026 15:30 IST (index futures volume used as proxy; the cash index has no traded volume)
+- Note: Closed in the upper part of its range.
+- Uncertainty: Levels are references from completed bars, not targets.
+
+R07 Liquidity / depth — COMPLETE
+4 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: depth
+- MOCKBANK_A median spread: 1.2 bps
+- MOCKBANK_A median best-level size: 850 shares
+- MOCKOIL_C median spread: 1.8 bps
+- MOCKOIL_C median best-level size: 620 shares
+4 items: INDICATIVE AUCTION unless marked | as of 01 Oct 2026 09:08 IST | MOCK feed: pre_open
+- MOCKBANK_A indicative equilibrium price: 1658.00 INR
+- MOCKBANK_A buy/sell imbalance: 42000 shares
+- MOCKOIL_C indicative equilibrium price: 1411.50 INR
+- MOCKOIL_C buy/sell imbalance: -18000 shares
+- Note: Entitled depth tier: L1 (MOCK fixture rights).
+- Note: Visible resting liquidity can be cancelled before it trades.
+
+R08 Order flow — COMPLETE
+- Prior session delta (tick-rule estimate): 20 contracts [PROXY] — NIFTY OCT FUT (MOCK); MOCK feed: trades, as of 30 Sep 2026 15:30 IST (tick-rule proxy: side inferred from price change, not exchange aggressor flag; misclassifies trades inside the spread; unclassified 50; method tick-rule-v1)
+- GAP today's order flow: NOT APPLICABLE — Continuous trading starts 09:15 IST; today's executed flow does not exist
+- Note: Snapshot quotes/depth are not executed flow.
+
+R09 OI / F&O — COMPLETE
+- NIFTY OCT FUT (MOCK) (expiry 2026-10-27) open interest: 15000000 contracts [PRIOR SESSION] — NIFTY OCT FUT (MOCK) (expiry 2026-10-27); MOCK feed: fno, as of 30 Sep 2026 18:00 IST
+- NIFTY OCT FUT (MOCK) (expiry 2026-10-27) OI change: 5.26 % [DERIVED] — NIFTY OCT FUT (MOCK) (expiry 2026-10-27); MOCK feed: fno, as of 30 Sep 2026 18:00 IST (method options-v1)
+- NIFTY OCT FUT (MOCK) (expiry 2026-10-27) basis vs spot close: 45 points [DERIVED] — NIFTY OCT FUT (MOCK) (expiry 2026-10-27); MOCK feed: fno, as of 30 Sep 2026 18:00 IST (settle minus spot close; method options-v1)
+- NIFTY OCT FUT (MOCK) (expiry 2026-10-27) basis vs spot close: 0.18 % of spot [DERIVED] — NIFTY OCT FUT (MOCK) (expiry 2026-10-27); MOCK feed: fno, as of 30 Sep 2026 18:00 IST (method options-v1)
+3 items: PRIOR SESSION unless marked | as of 30 Sep 2026 18:00 IST | MOCK feed: fno
+- F&O ban list: MOCKSTOCK_Q — NSE F&O
+- FII net index futures OI: -120000 contracts
+- Client net index futures OI: 85000 contracts
+- Note: OI rising alone is not net bullish buying or dealer inventory.
+- Note: Participant data is the prior session's released report, not live positioning.
+
+R10 Funding / flows — DEGRADED
+3 items: PRIOR SESSION unless marked | as of 30 Sep 2026 19:30 IST | MOCK feed: flows
+- FII/FPI net cash (provisional): -1250.40 INR crore — NSE+BSE cash (MOCK)
+- DII net cash (provisional): 1630.10 INR crore — NSE+BSE cash (MOCK)
+- RBI net liquidity position: 120000 INR crore — Banking system (MOCK)
+- GAP perpetual funding rate: NOT APPLICABLE — Ordinary NSE futures/options have no perpetual funding rate
+- GAP Margin financing: UNAVAILABLE — No sourced margin-financing data in current feed
+- Note: Provisional flow figures can be revised.
+
+R11 Sentiment — COMPLETE
+5 items: DERIVED unless marked | as of 01 Oct 2026 08:30 IST | MOCK feed: news | method tone-count-v1
+- Unique origin stories: 4 count — MARKET
+- Reposts collapsed: 1 count — MARKET
+- Banks tone (pos/neg/neutral): 1/1/0 count
+- Energy tone (pos/neg/neutral): 0/1/0 count
+- IT tone (pos/neg/neutral): 1/0/0 count
+- Note: CONTRADICTION on MOCKBANK_A: positive per o1; negative per o2
+- Uncertainty: Tone does not guarantee direction.
+
+R12 Auction market theory (AMT) — DEGRADED
+4 items: PROXY unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: fut_bars | NIFTY OCT FUT (MOCK) | proxy instrument NIFTY OCT FUT (MOCK) for NIFTY 50 cash index; method VP-even-split-v1/VA70-single-row-v1/edges-v1; bin 20 points; session = prior day's bars
+- Point of control (POC): 25150 points
+- Value area high (VAH): 25200 points
+- Value area low (VAL): 25060 points
+- Prior close vs value area: inside
+- GAP opening location / initial balance / developing profile: NOT APPLICABLE — Need intraday trading after 09:15 IST
+- GAP GIFT Nifty: UNAVAILABLE — Not licensed in current feed, gate G03. Effect: overnight inventory not assessed
+- Note: Acceptance above VAH / rejection back inside value is only observable after the open.
+- Uncertainty: Profile is of the futures proxy, not the cash index itself.
+
+R13 Options lens — COMPLETE
+4 items: DERIVED unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: option_chain | NIFTY 50 (MOCK) options, expiry 2026-10-06 | method options-v1; context only, not support/resistance
+- Put/call ratio (OI): 0.92 ratio
+- Put/call ratio (volume): 0.89 ratio
+- Max pain strike: 25100 points
+- ATM strike (vs prior spot close): 25100 points
+2 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: option_chain | NIFTY 50 (MOCK) options, expiry 2026-10-06
+- ATM CE implied volatility: 11.2 % annualised
+- ATM PE implied volatility: 11.9 % annualised
+4 items: DERIVED unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: option_chain | NIFTY 50 (MOCK) 25100 options, expiry 2026-10-06 | MODEL value (bsm-european-v1): Black-Scholes-Merton, European exercise; spot = prior close 25120; vol = published ATM CE IV 11.2%; rate 6.50% continuous (MOCK 91-day T-bill yield); dividend yield 1.20% continuous (MOCK Nifty 50 trailing dividend yield); time ACT/365 from data as-of to expiry 15:30 IST = 0.0164 yr. Not a market price.
+- ATM CE delta (model): 0.5490 ratio
+- ATM CE gamma (model): 0.001097 per point
+- ATM CE vega (model): 12.75 points per 1 vol pt
+- ATM CE theta (model): -13.87 points per day
+4 items: DERIVED unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: option_chain | NIFTY 50 (MOCK) 25100 options, expiry 2026-10-06 | MODEL value (bsm-european-v1): Black-Scholes-Merton, European exercise; spot = prior close 25120; vol = published ATM PE IV 11.9%; rate 6.50% continuous (MOCK 91-day T-bill yield); dividend yield 1.20% continuous (MOCK Nifty 50 trailing dividend yield); time ACT/365 from data as-of to expiry 15:30 IST = 0.0164 yr. Not a market price.
+- ATM PE delta (model): -0.4534 ratio
+- ATM PE gamma (model): 0.001034 per point
+- ATM PE vega (model): 12.76 points per 1 vol pt
+- ATM PE theta (model): -10.97 points per day
+2 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: option_chain | NIFTY 50 (MOCK) options, expiry 2026-10-06
+- Highest call OI strike: 25200 points
+- Highest put OI strike: 25000 points
+- Note: Aggregate chain does not disclose dealer long/short inventory; no gamma-exposure estimate is made.
+
+R14 Conditional outlook — COMPLETE
+2 items: PRIOR SESSION unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: index_bars | NIFTY 50 (MOCK)
+- Prior session high: 25180 points
+- Prior session low: 24960 points
+2 items: PROXY unless marked | as of 30 Sep 2026 15:30 IST | MOCK feed: fut_bars | NIFTY OCT FUT (MOCK) | proxy instrument NIFTY OCT FUT (MOCK) for NIFTY 50 cash index; method VP-even-split-v1/VA70-single-row-v1/edges-v1; bin 20 points; session = prior day's bars
+- Value area high (VAH): 25200 points
+- Value area low (VAL): 25060 points
+Levels on NIFTY OCT FUT (MOCK) unless marked.
+- BASE: Trade holds between VAL 25060 and VAH 25200 after 09:15. Invalid if: sustained trade outside VAL-VAH. Confidence: low.
+- UP: Acceptance above VAH 25200, then above prior high 25180 [NIFTY 50 (MOCK)]. Invalid if: back below VAH 25200. Confidence: low.
+- DOWN: Acceptance below VAL 25060, then below prior low 24960 [NIFTY 50 (MOCK)]. Invalid if: back above VAL 25060. Confidence: low.
+- Note: Contrary evidence: CONTRADICTION on MOCKBANK_A: positive per o1; negative per o2
+- Uncertainty: Conditional paths, not predictions. Confidence is qualitative.
+
+R15 Data / quality summary — DEGRADED
+- Dataset news as of: 01 Oct 2026 08:30 IST timestamp [DERIVED] — dataset news; MOCK feed: news, as of 01 Oct 2026 08:30 IST
+- Dataset global as of: 01 Oct 2026 08:40 IST timestamp [DERIVED] — dataset global; MOCK feed: global, as of 01 Oct 2026 08:40 IST
+- Dataset macro as of: 01 Oct 2026 07:00 IST timestamp [DERIVED] — dataset macro; MOCK feed: macro, as of 01 Oct 2026 07:00 IST
+- Dataset sectors as of: 30 Sep 2026 15:30 IST timestamp [DERIVED] — dataset sectors; MOCK feed: sectors, as of 30 Sep 2026 15:30 IST
+- Dataset stocks as of: 30 Sep 2026 15:30 IST timestamp [DERIVED] — dataset stocks; MOCK feed: stocks, as of 30 Sep 2026 15:30 IST
+- Dataset index_bars as of: 30 Sep 2026 15:30 IST timestamp [DERIVED] — dataset index_bars; MOCK feed: index_bars, as of 30 Sep 2026 15:30 IST
+- Dataset fut_bars as of: 30 Sep 2026 15:30 IST timestamp [DERIVED] — dataset fut_bars; MOCK feed: fut_bars, as of 30 Sep 2026 15:30 IST
+- Dataset depth as of: 30 Sep 2026 15:30 IST timestamp [DERIVED] — dataset depth; MOCK feed: depth, as of 30 Sep 2026 15:30 IST
+- Dataset trades as of: 30 Sep 2026 15:30 IST timestamp [DERIVED] — dataset trades; MOCK feed: trades, as of 30 Sep 2026 15:30 IST
+- Dataset fno as of: 30 Sep 2026 18:00 IST timestamp [DERIVED] — dataset fno; MOCK feed: fno, as of 30 Sep 2026 18:00 IST
+- Dataset flows as of: 30 Sep 2026 19:30 IST timestamp [DERIVED] — dataset flows; MOCK feed: flows, as of 30 Sep 2026 19:30 IST
+- Dataset option_chain as of: 30 Sep 2026 15:30 IST timestamp [DERIVED] — dataset option_chain; MOCK feed: option_chain, as of 30 Sep 2026 15:30 IST
+- Dataset pre_open as of: 01 Oct 2026 09:08 IST timestamp [DERIVED] — dataset pre_open; MOCK feed: pre_open, as of 01 Oct 2026 09:08 IST
+- GAP GIFT Nifty: UNAVAILABLE — Not licensed in current feed, gate G03
+- Note: R01 Overnight news: COMPLETE
+- Note: R02 US / Asia / global futures: DEGRADED
+- Note: R03 Oil / macro: COMPLETE
+- Note: R04 Sector map: COMPLETE
+- Note: R05 Large-cap focus: COMPLETE
+- Note: R06 Price action: COMPLETE
+- Note: R07 Liquidity / depth: COMPLETE
+- Note: R08 Order flow: COMPLETE
+- Note: R09 OI / F&O: COMPLETE
+- Note: R10 Funding / flows: DEGRADED
+- Note: R11 Sentiment: COMPLETE
+- Note: R12 Auction market theory (AMT): DEGRADED
+- Note: R13 Options lens: COMPLETE
+- Note: R14 Conditional outlook: COMPLETE
+- Note: Mode: RESEARCH. No simulated account, no orders, no broker.
+
+Hash 0471d531c68487d5 | feed fixture:2026-10-01/auction_mock | model mock-model-v2 | calendar NSE-CM-2026-v1

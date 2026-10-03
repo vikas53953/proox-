@@ -1,0 +1,64 @@
+{
+  "is_mock": true,
+  "note": "MOCK FIXTURE. Synthetic values and instruments. Not market data.",
+  "capabilities": {
+    "news": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    },
+    "global": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    },
+    "gift_nifty": {
+      "granted": false,
+      "rights_note": "GIFT Nifty not licensed in current feed (G03)"
+    },
+    "macro": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    },
+    "sectors": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    },
+    "stocks": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    },
+    "index_bars": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    },
+    "fut_bars": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    },
+    "depth": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights",
+      "tier": "L1"
+    },
+    "trades": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights",
+      "tier": "price-only"
+    },
+    "fno": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    },
+    "flows": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    },
+    "option_chain": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    },
+    "pre_open": {
+      "granted": true,
+      "rights_note": "MOCK fixture rights"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "is_mock": true,
+  "note": "MOCK. S&P 500 quote is two days old.",
+  "base": "full_mock"
+}
