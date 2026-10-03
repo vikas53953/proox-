@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from desk import pii
 from desk.config import TelegramSettings, WhatsAppSettings
 from desk.core.lens import LensId
 from desk.db.models import (
@@ -239,6 +240,15 @@ def _neutral(session: Session, msg: InboundMessage, now: datetime) -> str:
     return "not_bound"
 
 
+def _privacy_notice(session: Session, wa, msg: InboundMessage, tenant: Tenant, now) -> None:
+    """GATES.md T1 (DRAFT wording): Telegram only, only with TELEGRAM_PRIVACY_NOTICE=1,
+    queued right after the welcome. The key is per tenant, so it is never queued twice."""
+    if msg.channel != "telegram" or not getattr(wa, "privacy_notice", False):
+        return
+    body = msgs.privacy_notice_telegram(encrypted=pii.enabled())
+    _queue(session, msg, tenant, "privacy_notice", body, now, key=f"privacy_notice:{tenant.id}")
+
+
 def handle_message(
     session: Session,
     wa: WhatsAppSettings | TelegramSettings,
@@ -288,6 +298,7 @@ def handle_message(
                 msgs.WELCOME_PENDING.format(reason=tenant.pending_reason),
                 now,
             )
+            _privacy_notice(session, wa, msg, tenant, now)
             _queue(session, msg, tenant, "opt_in", msgs.OPT_IN, now)
             handled = "bound"
         else:

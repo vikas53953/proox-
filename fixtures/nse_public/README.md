@@ -16,6 +16,10 @@
   stock universe (`SAMPLE_SMALL`, a `BE` series row) to prove they are ignored; the stock
   universe stays the two `SAMPLE_*` names of the pre-open sample. Participant OI header
   cells keep the stray tabs seen in NSE's file; longs equal shorts market-wide.
+- Check real files with `python -m desk nse verify <folder>` (offline, operator only): save
+  the real NSE downloads by hand in one folder (JSON under the names below, the CSVs under
+  these names or NSE's dated names), run it, and fix every MISSING FIELD / PARSE ERROR /
+  CHECK FAILED before G03 closes. EXTRA FIELD lines are notes. It does not enable the adapter.
 - The NSE CM holiday list is not repeated here: the calendar already lives in
   `fixtures/calendar/`.
 

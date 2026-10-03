@@ -60,6 +60,9 @@ class TelegramSettings:
     # B07: TELEGRAM_ALLOWED_CHAT_IDS. None = unset = no restriction (today's behaviour).
     # Set: only these chat ids may bind an invite, be handled or receive tenant messages.
     allowed_chat_ids: frozenset[str] | None = None
+    # TELEGRAM_PRIVACY_NOTICE=1: send the (DRAFT) privacy disclosure once, right after a
+    # Telegram welcome (GATES.md T1). Off by default.
+    privacy_notice: bool = False
 
     @property
     def bot_id(self) -> str:
@@ -130,9 +133,18 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
             bot_username=env.get("TELEGRAM_BOT_USERNAME", ""),
             live=env.get("DESK_TELEGRAM_LIVE", "") == "1",
             allowed_chat_ids=parse_chat_ids(env.get("TELEGRAM_ALLOWED_CHAT_IDS", "")),
+            privacy_notice=_flag(env, "TELEGRAM_PRIVACY_NOTICE"),
         ),
         senders=_sender_crypto(env),
     )
+
+
+def _flag(env: dict[str, str], name: str) -> bool:
+    """Empty or "0" = off (default), "1" = on; anything else refuses to start."""
+    raw = env.get(name, "").strip()
+    if raw not in ("", "0", "1"):
+        raise SettingsError(f"{name} must be 0 or 1")
+    return raw == "1"
 
 
 _CHAT_ID = re.compile(r"-?[0-9]{1,19}")
