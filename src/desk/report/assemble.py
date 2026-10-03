@@ -5,6 +5,7 @@ from datetime import date, datetime
 from desk.agents.reviewer import Review, ReviewStatus
 from desk.core.lens import LensId, LensResult
 from desk.core.scenario import Scenario
+from desk.feeds.base import TERMS_GAP_TOPIC
 from desk.lenses.context import ReportKind
 from desk.report.model import IncompleteReportError, Report, ReviewRejectedError
 
@@ -14,9 +15,9 @@ def top_gaps(lenses: list[LensResult]) -> tuple[str, ...]:
     naming every lens it affects."""
     grouped: dict[tuple[str, str], list[str]] = {}
     for r in lenses:
-        if r.lens is LensId.R15:
-            continue  # R15 restates the same gaps per dataset
         for g in r.gaps:
+            if r.lens is LensId.R15 and g.topic != TERMS_GAP_TOPIC:
+                continue  # R15 restates the same gaps per dataset; only its terms gap is new
             if g.degrades:
                 grouped.setdefault((str(g.data_class), g.reason), []).append(r.lens.value)
     return tuple(

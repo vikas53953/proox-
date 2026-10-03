@@ -103,6 +103,11 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     if model_adapter != "mock":
         raise GateBlockedError("model adapter BLOCKED by G01")
     feed_adapter = env.get("DESK_FEED_ADAPTER", "fixture")
+    if feed_adapter == "nse_public":
+        raise GateBlockedError(
+            "feed adapter 'nse_public' is built but DISABLED: G03 is BLOCKED until the owner "
+            "confirms NSE usage / redistribution / AI-use terms (GATES.md, G03 staged direction)"
+        )
     if feed_adapter != "fixture":
         raise GateBlockedError("feed adapter BLOCKED by G03")
     version = env.get("WHATSAPP_GRAPH_VERSION", GRAPH_API_VERSION)

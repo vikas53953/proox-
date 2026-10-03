@@ -57,8 +57,12 @@ def build(ctx: LensContext) -> LensResult:
         gaps.append(AUCTION_NOT_YET)
     else:
         pre = ctx.ds(DatasetKind.PRE_OPEN)
+        pre_stale = ctx.staleness(DatasetKind.PRE_OPEN, pre) if pre is not None else None
         if pre is None:
             gaps.append(missing(DatasetKind.PRE_OPEN, ctx, "no indicative auction data"))
+        elif pre_stale:
+            # an old auction is not today's indicative price: no value, only the gap
+            gaps.append(stale_gap(DatasetKind.PRE_OPEN, pre_stale, "no indicative auction data"))
         else:
             for r in pre.records:
                 facts.append(
