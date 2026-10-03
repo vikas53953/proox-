@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -38,7 +38,7 @@ from desk.report.model import Report
 from desk.transport.whatsapp.payload import InboundMessage
 
 NEUTRAL_WINDOW = timedelta(hours=24)
-ONBOARDING_STEP = timedelta(microseconds=1)  # created_at spacing of the bind replies
+ONBOARDING_STEP = timedelta(microseconds=1)  # created_at spacing of replies to one chat
 YES_WORDS = {"YES", "Y", "HAAN", "HA", "HAN"}
 NO_WORDS = {"NO", "N", "NAHI", "NAHIN"}
 GREETINGS = {"HI", "HII", "HELLO", "HEY", "NAMASTE", "/START"}  # /start = Telegram deep link
@@ -59,6 +59,18 @@ def _queue(
     now: datetime,
     key: str | None = None,
 ) -> None:
+    # created_at sets the send order. Messages of one poll/webhook batch share `now`, so a
+    # reply is stamped strictly after everything already queued for this chat (a YES sent
+    # right after /start must not be answered before the opt-in question).
+    latest = session.execute(
+        select(func.max(Outbox.created_at)).where(
+            Outbox.channel == msg.channel,
+            Outbox.business_phone_id == msg.phone_number_id,
+            Outbox.recipient == msg.sender,
+        )
+    ).scalar()
+    if latest is not None and now <= latest:
+        now = latest + ONBOARDING_STEP
     session.execute(
         pg_insert(Outbox)
         .values(
