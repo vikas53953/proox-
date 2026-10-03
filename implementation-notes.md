@@ -93,3 +93,4 @@ One line per deviation from the approved plan: what changed and why.
 - 2026-10-03 G03 step 2: data timestamped after the cutoff still raises LookAheadError in `ctx.ds` (existing rule, loud failure, worker retries then notifies) rather than becoming a gap — open question for the owner.
 - 2026-10-03 G03 step 2: mutation checks (each applied, run, reverted): config allows nse_public; R07 ignores pre-open staleness; pre-open max age removed; pre-open as-of = newest row; FII net check removed; missing chain side -> 0; IV 0 kept; problems not recorded; KeyError not caught; samples not MOCK; terms gap dropped from top gaps; wrong-day folder served. 12/12 caught.
 - 2026-10-03 G03 step 2: container run (Python 3.13.14 / PostgreSQL 16): 287 passed, 2 failed = the exact-pin tests (by design); 27 new tests in tests/test_nse_public_adapter.py; ruff clean.
+- 2026-10-03 Owner approved the 15-minute pre-open freshness limit (decision card, 20:57 UTC).
