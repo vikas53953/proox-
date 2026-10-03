@@ -26,7 +26,7 @@ No style/equivalent/latest substitution. Any change here is an owner decision (R
 | uvicorn | 0.54.0 | ASGI server | runtime |
 | matplotlib | 3.11.2 | PNG charts | runtime |
 | reportlab | 5.0.1 | PDFs | runtime |
-| cryptography | 50.0.2 | secret envelope — **installed, unused until G05 key store** | runtime |
+| cryptography | 50.0.2 | secret envelope — **now used by B02** (AES-SIV transport-id encryption, `desk/pii.py`); the key source still waits for the G05 key store | runtime |
 | Pillow | 12.3.0 | media | runtime |
 | pytest | 9.1.1 | tests | dev |
 | pytest-asyncio | 1.4.0 | async tests | dev |

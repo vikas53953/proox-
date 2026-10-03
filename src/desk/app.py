@@ -10,6 +10,7 @@ from desk import SPEC_VERSION
 from desk.config import Settings, load_settings
 from desk.db.session import make_engine, make_session_factory
 from desk.logsafe import install as install_log_redaction
+from desk.pii import check_startup, configure_from
 from desk.transport.whatsapp.webhook import router as whatsapp_router
 
 
@@ -18,8 +19,12 @@ def create_app(
 ) -> FastAPI:
     install_log_redaction()
     settings = settings or load_settings()
+    configure_from(settings)  # B02: transport-id encryption (OFF unless enabled)
     if session_factory is None and settings.database_url:
         session_factory = make_session_factory(make_engine(settings.database_url))
+    if session_factory is not None:
+        with session_factory() as s:
+            check_startup(s)  # refuse mixed plaintext / encrypted transport ids
     app = FastAPI(
         title="desk", version=SPEC_VERSION, docs_url=None, redoc_url=None, openapi_url=None
     )

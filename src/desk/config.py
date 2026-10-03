@@ -8,6 +8,8 @@ Secret fields are excluded from repr so they cannot leak into logs (RC08).
 import os
 from dataclasses import dataclass, field
 
+from desk.pii import SenderKeyError, parse_key
+
 ALLOWED_MODES = frozenset({"mock"})
 # Telegram Bot API version this code was checked against (RC12 pin, see BOM.md).
 # None = not yet pinned: live Telegram refuses to start until the owner records it.
@@ -61,6 +63,15 @@ class TelegramSettings:
 
 
 @dataclass(frozen=True)
+class SenderCryptoSettings:
+    """B02: encrypt transport ids at rest. OFF by default; the key is ignored when OFF.
+    Key: env var until the G05 key store exists; never in repr, logs or commits."""
+
+    enabled: bool = False
+    key: bytes | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
 class Settings:
     mode: str
     database_url: str | None = field(repr=False)  # URL may embed a password
@@ -68,6 +79,7 @@ class Settings:
     feed_adapter: str
     whatsapp: WhatsAppSettings = field(default_factory=WhatsAppSettings)
     telegram: TelegramSettings = field(default_factory=TelegramSettings)
+    senders: SenderCryptoSettings = field(default_factory=SenderCryptoSettings)
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
@@ -101,4 +113,16 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
             bot_username=env.get("TELEGRAM_BOT_USERNAME", ""),
             live=env.get("DESK_TELEGRAM_LIVE", "") == "1",
         ),
+        senders=_sender_crypto(env),
     )
+
+
+def _sender_crypto(env: dict[str, str]) -> SenderCryptoSettings:
+    """DESK_ENCRYPT_SENDERS=1 needs a valid DESK_SENDER_KEY, else startup is refused
+    (SenderKeyError, message never contains the key). OFF ignores the key."""
+    flag = env.get("DESK_ENCRYPT_SENDERS", "0").strip()
+    if flag in ("", "0"):
+        return SenderCryptoSettings()
+    if flag != "1":
+        raise SenderKeyError("DESK_ENCRYPT_SENDERS must be 0 or 1")
+    return SenderCryptoSettings(enabled=True, key=parse_key(env.get("DESK_SENDER_KEY", "")))
