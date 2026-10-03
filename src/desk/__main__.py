@@ -2,6 +2,7 @@
 
 python -m desk report --scenario full_mock [--kind AUCTION] [--date 2026-10-01]
 python -m desk senders status|encrypt|rotate   (B02/B06: transport ids at rest, operator only)
+python -m desk nse verify <folder>   (offline: check hand-saved NSE files; adapter stays off)
 """
 
 import argparse
@@ -45,8 +46,17 @@ def main() -> None:
     srv.add_argument("--auction", action="store_true", help="enable the 09:12 addendum")
     snd = sub.add_parser("senders", help="B02: transport ids at rest (operator only)")
     snd.add_argument("action", choices=["status", "encrypt", "rotate"])
+    nse = sub.add_parser("nse", help="NSE public files (offline, operator only)")
+    nse.add_argument("action", choices=["verify"])
+    nse.add_argument("folder", help="folder with files saved by hand from NSE")
+    nse.add_argument(
+        "--universe", default=None, help="bhavcopy symbols to check (comma list); default all EQ"
+    )
     args = parser.parse_args()
     install_log_redaction()
+    if args.cmd == "nse":
+        _nse_verify(args)
+        return
     if args.cmd == "senders":
         _senders(args)
         return
@@ -87,6 +97,24 @@ def _write_media(report, out: Path) -> None:
     for c in charts:
         (out / f"{stem}-{c.name}.png").write_bytes(c.png)
         (out / f"{stem}-{c.name}.manifest.json").write_text(json.dumps(c.manifest, indent=2))
+
+
+def _nse_verify(args: argparse.Namespace) -> None:
+    """Offline: no settings, no database, no network; the adapter is not enabled."""
+    from desk.feeds.nse_verify import render, verify_folder
+
+    folder = Path(args.folder)
+    if not folder.is_dir():
+        raise SystemExit(f"not a folder: {folder}")
+    universe = None
+    if args.universe is not None:
+        universe = tuple(s.strip() for s in args.universe.split(",") if s.strip())
+        if not universe:
+            raise SystemExit("--universe needs at least one symbol")
+    lines, ok = render(*verify_folder(folder, universe))
+    print("\n".join(lines))
+    if not ok:
+        raise SystemExit(1)
 
 
 def _factory(check: bool = True):

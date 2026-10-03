@@ -24,6 +24,8 @@ The NSE public adapter will be built and tested against saved sample files but s
 
 - step 2 adapter built against hand-made shape samples, disabled (2026-10-03)
 - step 2b: sectors/stocks/participant OI added on shape samples, disabled (2026-10-03)
+- verify real files with `python -m desk nse verify <folder>` before G03 closes (offline
+  check of hand-saved NSE files against the adapter's shapes; does not enable it) (2026-10-04)
 
 ## G02 verification checklist (must be ticked before any real WhatsApp send)
 

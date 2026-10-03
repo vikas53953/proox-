@@ -27,7 +27,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 
 | Path | What it does |
 |---|---|
-| `__main__.py` | `python -m desk report ...` prints a MOCK report; `python -m desk invite ...` creates an invite (operator only, code shown once); `python -m desk senders status|encrypt|rotate` checks / encrypts / re-keys stored transport ids (B02/B06, operator only) |
+| `__main__.py` | `python -m desk report ...` prints a MOCK report; `python -m desk invite ...` creates an invite (operator only, code shown once); `python -m desk senders status|encrypt|rotate` checks / encrypts / re-keys stored transport ids (B02/B06, operator only); `python -m desk nse verify <folder>` checks hand-saved NSE files offline (adapter stays off) |
 | `config.py` | Reads settings; refuses any real adapter while gates are blocked |
 | `app.py` | Web front door: WhatsApp webhook + health check, nothing else |
 | `jobs/scheduler.py` | Writes one dated job per day (07:30 start, 08:45 target, 09:15 hard stop); holidays get a SKIPPED row with the reason |
@@ -70,6 +70,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `feeds/base.py` | The plug socket every data feed must fit (fixture now, NSE public next, broker later) + what each feed has rights to |
 | `feeds/fixture.py` | Reads the MOCK files in `fixtures/market/` |
 | `feeds/nse_public.py` | G03 steps 2 + 2b, **DISABLED**: NSE public data (pre-open, option chain, FII/DII; 2b: sector index closes, prior-session stock OHLC for a fixed universe, F&O participant OI) read from saved files only (`FileSource`, no network code); everything else declared not granted; startup refuses `DESK_FEED_ADAPTER=nse_public` while G03 is blocked |
+| `feeds/nse_verify.py` | Offline check of real NSE files saved by hand: file name -> dataset, decodes, every field the adapter reads present (MISSING FIELD), fields not in the shape sample (EXTRA FIELD, note only), then the adapter's own parser and cross-checks (CHECK FAILED); non-zero exit on any problem |
 | `quant/bars.py` | Price bars; drops any bar not finished by the cutoff (no peeking ahead) |
 | `quant/levels.py` | Prior-day high / low / close |
 | `quant/profile.py` | Volume profile: POC and 70% value area |
@@ -121,6 +122,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `../test_b07_b08.py` | B07: `TELEGRAM_ALLOWED_CHAT_IDS` unset = unchanged; set = outsider gets the neutral reply, invite stays open, non-listed tenants get nothing; bad values refuse. B08: fake WhatsApp refuses a real token in `serve` and never claims a real phone id's rows |
 | `../test_b06_key_rotation.py` | B06: `senders rotate` re-keys every covered value in one transaction; re-run skips values under the new key; a value neither key opens aborts with nothing changed; refusals; keys never printed |
 
+| `tests/test_nse_verify.py` | `nse verify`: samples OK; each required field / column removed, broken JSON, non-UTF-8, bad numbers, failed cross-checks, unknown names, empty folder = non-zero exit; extra fields are notes; NSE dated names recognised; gate still refuses `nse_public` |
 | `tests/test_nse_public_adapter.py` | NSE adapter (steps 2 + 2b): parses each sample, maps to sourced facts, missing / malformed / stale = gap, refused at startup, no network imports, full R01-R15 report with gaps |
 | `tests/whatsapp_helpers.py` | Builds signed fake WhatsApp webhooks for tests |
 | `tests/constitution/test_e07_failures.py` | Worker crash, stale lease, feed/DB/budget failure, late and missed-deadline cases are all visible, never silent |
