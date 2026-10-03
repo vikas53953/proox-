@@ -3,6 +3,8 @@ Outbox, StoredReport). Times are stored in UTC.
 
 Privacy (RC08): invite codes are stored only as a SHA-256 hash; inbound text is stored
 with invite codes redacted; every tenant-owned row carries tenant_id.
+B02: transport ids (and keys embedding them) use `TransportId` columns, encrypted at
+rest when DESK_ENCRYPT_SENDERS is on (see desk.pii).
 """
 
 import uuid
@@ -24,6 +26,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from desk.pii import TransportId
+
 UTC_TS = DateTime(timezone=True)
 
 
@@ -42,7 +46,7 @@ class Invite(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
-    bound_sender: Mapped[str | None] = mapped_column(String(20), index=True)
+    bound_sender: Mapped[str | None] = mapped_column(TransportId(64), index=True)
     channel: Mapped[str] = mapped_column(String(16), default="whatsapp", server_default="whatsapp")
     business_phone_id: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(UTC_TS)
@@ -67,7 +71,7 @@ class Tenant(Base):
     # channel + business endpoint (WhatsApp phone_number_id / Telegram bot id) + sender id
     channel: Mapped[str] = mapped_column(String(16), default="whatsapp", server_default="whatsapp")
     business_phone_id: Mapped[str] = mapped_column(String(32))
-    sender: Mapped[str] = mapped_column(String(20))  # transport identity only (wa_id / tg id)
+    sender: Mapped[str] = mapped_column(TransportId(64))  # transport id only (wa_id / tg id)
     language: Mapped[str] = mapped_column(String(32), default="hinglish-roman")
     opt_in_state: Mapped[str] = mapped_column(String(16), default="unasked")
     state: Mapped[str] = mapped_column(String(16), default="pending")
@@ -102,10 +106,10 @@ class MessageBody(Base):
 class Inbound(Base):
     __tablename__ = "inbound_messages"
 
-    message_id: Mapped[str] = mapped_column(String(128), primary_key=True)  # dedupe key
+    message_id: Mapped[str] = mapped_column(TransportId(256), primary_key=True)  # dedupe key
     channel: Mapped[str] = mapped_column(String(16), default="whatsapp", server_default="whatsapp")
     business_phone_id: Mapped[str] = mapped_column(String(32))
-    sender: Mapped[str] = mapped_column(String(20), index=True)
+    sender: Mapped[str] = mapped_column(TransportId(64), index=True)
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), index=True)
     provider_time: Mapped[datetime] = mapped_column(UTC_TS)
     received_at: Mapped[datetime] = mapped_column(UTC_TS)
@@ -144,16 +148,16 @@ class Outbox(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    idempotency_key: Mapped[str] = mapped_column(String(200), unique=True)
+    idempotency_key: Mapped[str] = mapped_column(TransportId(320), unique=True)
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id"), index=True)
     channel: Mapped[str] = mapped_column(String(16), default="whatsapp", server_default="whatsapp")
     business_phone_id: Mapped[str] = mapped_column(String(32))
-    recipient: Mapped[str] = mapped_column(String(20), index=True)
+    recipient: Mapped[str] = mapped_column(TransportId(64), index=True)
     kind: Mapped[str] = mapped_column(String(32))
     body: Mapped[str] = mapped_column(Text)
     state: Mapped[str] = mapped_column(String(16), default="PENDING")
     created_at: Mapped[datetime] = mapped_column(UTC_TS)
-    in_reply_to: Mapped[str | None] = mapped_column(String(128))
+    in_reply_to: Mapped[str | None] = mapped_column(TransportId(256))
     proactive: Mapped[bool] = mapped_column(default=False, server_default=false())  # opt-in rules
     report_id: Mapped[str | None] = mapped_column(String(64))
     report_version: Mapped[int | None] = mapped_column(Integer)
@@ -164,7 +168,7 @@ class Outbox(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     next_attempt_at: Mapped[datetime | None] = mapped_column(UTC_TS)
     claimed_at: Mapped[datetime | None] = mapped_column(UTC_TS)
-    provider_message_id: Mapped[str | None] = mapped_column(String(128), unique=True)
+    provider_message_id: Mapped[str | None] = mapped_column(TransportId(256), unique=True)
     last_status_at: Mapped[datetime | None] = mapped_column(UTC_TS)
     error: Mapped[str | None] = mapped_column(Text)
     wait_reason: Mapped[str | None] = mapped_column(Text)
@@ -204,7 +208,7 @@ class Feedback(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
-    message_id: Mapped[str] = mapped_column(String(128), unique=True)
+    message_id: Mapped[str] = mapped_column(TransportId(256), unique=True)
     report_id: Mapped[str | None] = mapped_column(String(64))
     report_version: Mapped[int | None] = mapped_column(Integer)
     kind: Mapped[str] = mapped_column(String(16))
@@ -254,7 +258,7 @@ class DeliveryReceipt(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     outbox_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("outbox.id"), index=True)
-    provider_message_id: Mapped[str] = mapped_column(String(128))
+    provider_message_id: Mapped[str] = mapped_column(TransportId(256))
     status: Mapped[str] = mapped_column(String(16))
     provider_time: Mapped[datetime] = mapped_column(UTC_TS)
     received_at: Mapped[datetime] = mapped_column(UTC_TS)

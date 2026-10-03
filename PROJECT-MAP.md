@@ -13,12 +13,12 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `AUTOMATION.md` | How the @claude GitHub Action is used, its guardrails, and the owner-approval rule for merges |
 | `.github/workflows/claude.yml` | The GitHub Action itself (inactive until merged into `main`) |
 | `.github/workflows/ci.yml` | CI: full tests on Python 3.13.15 + PostgreSQL 17.11, plus ruff, on every PR and on `main` |
-| `BACKLOG.md` | Approved later items found during the build (B01 Muhurat report, B02 encrypt numbers — launch blocker) |
+| `BACKLOG.md` | Approved later items found during the build (B01 Muhurat report, B02 encrypt numbers — built behind a flag, launch blocker until G05 key store, B06 key rotation) |
 | `implementation-notes.md` | Log of every deviation from the plan, one line each, with the reason |
 | `pyproject.toml` | Project settings: exact pins, test and lint settings |
 | `requirements*.in` / `requirements*.lock` | Pinned direct packages / every package with checksums |
 | `.env.example` | Setting names with empty placeholders — never real secrets |
-| `alembic.ini`, `alembic/` | Database schema changes. `0001` = M2 tables; `0002` = jobs, delivery states, receipts; `0003` = media, feedback, corrections |
+| `alembic.ini`, `alembic/` | Database schema changes. `0001` = M2 tables; `0002` = jobs, delivery states, receipts; `0003` = media, feedback, corrections; `0004` = channel column, Telegram cursors; `0005` = B02 wider transport-id columns (downgrade refuses while any value is encrypted) |
 | `config/whatsapp_templates.json` | Template drafts from the design doc — status DRAFT, not submitted (G02) |
 | `uat/` | D07 run: `mock_days.py` plays 3 mock days end to end; `render_html.py` makes the chat page you review; `samples/uat/` holds the forwardable HTML + PDF |
 | `samples/` | Mock reports as text, plus `samples/media/`: the PDF, the chart PNG and its manifest — open them directly |
@@ -27,7 +27,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 
 | Path | What it does |
 |---|---|
-| `__main__.py` | `python -m desk report ...` prints a MOCK report; `python -m desk invite ...` creates an invite (operator only, code shown once) |
+| `__main__.py` | `python -m desk report ...` prints a MOCK report; `python -m desk invite ...` creates an invite (operator only, code shown once); `python -m desk senders status|encrypt` checks / encrypts stored transport ids (B02, operator only) |
 | `config.py` | Reads settings; refuses any real adapter while gates are blocked |
 | `app.py` | Web front door: WhatsApp webhook + health check, nothing else |
 | `jobs/scheduler.py` | Writes one dated job per day (07:30 start, 08:45 target, 09:15 hard stop); holidays get a SKIPPED row with the reason |
@@ -53,7 +53,8 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `transport/telegram/client.py` | Telegram TEST transport: Bot API calls, in-memory fake, live-mode gate |
 | `transport/telegram/poller.py` | Reads new Telegram messages (long polling) into the same onboarding/chat code |
 | `runner.py` | PC test loop: poll Telegram -> plan today -> run worker -> send |
-| `logsafe.py` | Scrubs tokens from every log line (Telegram's token sits in its URLs) |
+| `logsafe.py` | Scrubs tokens from every log line (Telegram's token sits in its URLs) and the B02 sender key |
+| `pii.py` | B02: WhatsApp numbers / Telegram chat ids encrypted at rest (AES-SIV, same id = same ciphertext so lookups work), behind `DESK_ENCRYPT_SENDERS` (OFF); mixed-state check; the encrypt-existing-rows step |
 | `transport/whatsapp/client.py` | Talks to the WhatsApp send API; only the in-memory fake exists while G02 is blocked |
 | `transport/whatsapp/templates.py` | List of message templates and their Meta status; only APPROVED ones may be used |
 | `transport/whatsapp/webhook.py` | The webhook itself: size limit → signature → parse → one transaction per message |
@@ -111,6 +112,7 @@ Plain-words role of every folder and key file. Refreshed each milestone (last: M
 | `test_e08_followup.py` | STOP/START, 09:12 addendum (and its 09:15 expiry), TEXT command, feedback, corrections |
 | `test_d03_media.py` | Real pixel + PDF checks: 390 px preview, greyscale, opaque, labels, manifest, page X of Y, searchable text |
 | `test_e06_golden.py` | Maths gives the hand-checked answers; no peeking ahead; contradictions caught; no certainty words |
+| `../test_b02_sender_encryption.py` | B02: flag OFF = rows unchanged; flag ON = no plain wa_id / chat id in any table, onboarding + sends + receipts still work; bad key refuses; CLI migrates mixed rows; key never logged; downgrade refuses |
 
 | `tests/whatsapp_helpers.py` | Builds signed fake WhatsApp webhooks for tests |
 | `tests/constitution/test_e07_failures.py` | Worker crash, stale lease, feed/DB/budget failure, late and missed-deadline cases are all visible, never silent |
