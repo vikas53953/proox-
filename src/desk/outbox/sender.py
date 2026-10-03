@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import partial
 
-from sqlalchemy import exists, select, tuple_, update
+from sqlalchemy import exists, func, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, aliased, sessionmaker
 
@@ -60,12 +60,18 @@ def claim(
     recipient that still has an earlier message waiting out a retry/cooldown — so part 2
     can never overtake part 1 (MED-4)."""
     earlier = aliased(Outbox)
-    cooling = exists().where(  # same recipient on the same endpoint is waiting a retry out
+    last = 2**31 - 1  # ORDER BY part_no puts NULL last; compare the same way
+    cooling = exists().where(  # an EARLIER row, same recipient + endpoint, waits a retry out
         earlier.state == "PENDING",
         earlier.next_attempt_at > now,
         earlier.channel == Outbox.channel,
         earlier.business_phone_id == Outbox.business_phone_id,
         earlier.recipient == Outbox.recipient,
+        earlier.id != Outbox.id,
+        # (created_at, part_no) at or before this row in claim order; an exact tie still
+        # holds (safe: neither may overtake the other), a LATER cooling row never does
+        tuple_(earlier.created_at, func.coalesce(earlier.part_no, last))
+        <= tuple_(Outbox.created_at, func.coalesce(Outbox.part_no, last)),
     )
     q = (
         select(Outbox)

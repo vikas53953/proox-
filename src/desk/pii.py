@@ -9,7 +9,8 @@ anyone with DB access can still see that two rows hold the SAME id (not which id
 fixed associated-data label is used for every column so cross-table equality works.
 
 The key (DESK_SENDER_KEY, urlsafe base64 of 64 random bytes) lives in an env var until
-the G05 key store exists. Key rotation is not built (backlog B06).
+the G05 key store exists. Key rotation (B06): `python -m desk senders rotate` re-encrypts
+every covered value from DESK_SENDER_KEY to DESK_SENDER_KEY_NEW in one transaction.
 """
 
 import base64
@@ -56,18 +57,25 @@ class SenderStateError(RuntimeError):
     """Stored rows do not match the flag (mixed plaintext / encrypted)."""
 
 
-def parse_key(raw: str) -> bytes:
+def parse_key(raw: str, name: str = "DESK_SENDER_KEY") -> bytes:
     """urlsafe base64 (padding optional) of exactly 64 bytes, else SenderKeyError."""
     raw = (raw or "").strip()
     if not raw:
-        raise SenderKeyError("DESK_ENCRYPT_SENDERS=1 needs DESK_SENDER_KEY (not set)")
+        raise SenderKeyError(f"DESK_ENCRYPT_SENDERS=1 needs {name} (not set)")
     try:
         key = base64.b64decode(raw + "=" * (-len(raw) % 4), altchars=b"-_", validate=True)
     except (binascii.Error, ValueError):
-        raise SenderKeyError("DESK_SENDER_KEY is not urlsafe base64") from None
+        raise SenderKeyError(f"{name} is not urlsafe base64") from None
     if len(key) != KEY_BYTES:
-        raise SenderKeyError(f"DESK_SENDER_KEY must decode to exactly {KEY_BYTES} bytes")
+        raise SenderKeyError(f"{name} must decode to exactly {KEY_BYTES} bytes")
     return key
+
+
+def register_key(key: bytes) -> None:
+    """Every text form of a key is redacted from logs (logsafe)."""
+    for form in (base64.urlsafe_b64encode(key).decode(), base64.b64encode(key).decode()):
+        register_secret(form)
+        register_secret(form.rstrip("="))
 
 
 class _State:
@@ -85,9 +93,7 @@ def configure(enabled: bool, key: bytes | None = None) -> None:
         return
     if key is None or len(key) != KEY_BYTES:
         raise SenderKeyError(f"DESK_SENDER_KEY must decode to exactly {KEY_BYTES} bytes")
-    for form in (base64.urlsafe_b64encode(key).decode(), base64.b64encode(key).decode()):
-        register_secret(form)
-        register_secret(form.rstrip("="))
+    register_key(key)
     _state.cipher, _state.enabled = AESSIV(key), True
 
 
@@ -103,8 +109,22 @@ def enabled() -> bool:
 def encrypt(value: str) -> str:
     if _state.cipher is None:
         raise SenderKeyError("transport id encryption is not configured")
-    ct = _state.cipher.encrypt(value.encode(), [AAD])
+    return _seal(_state.cipher, value)
+
+
+def _seal(cipher: AESSIV, value: str) -> str:
+    ct = cipher.encrypt(value.encode(), [AAD])
     return PREFIX + base64.urlsafe_b64encode(ct).decode().rstrip("=")
+
+
+def _open(cipher: AESSIV, stored: str) -> str | None:
+    """Plaintext, or None when this key cannot decrypt the stored value."""
+    body = stored[len(PREFIX) :]
+    try:
+        ct = base64.urlsafe_b64decode(body + "=" * (-len(body) % 4))
+        return cipher.decrypt(ct, [AAD]).decode()
+    except (InvalidTag, binascii.Error, ValueError):
+        return None
 
 
 def decrypt(stored: str) -> str:
@@ -113,14 +133,12 @@ def decrypt(stored: str) -> str:
             "a stored transport id is encrypted but no key is configured "
             "(set DESK_ENCRYPT_SENDERS=1 and DESK_SENDER_KEY)"
         )
-    body = stored[len(PREFIX) :]
-    try:
-        ct = base64.urlsafe_b64decode(body + "=" * (-len(body) % 4))
-        return _state.cipher.decrypt(ct, [AAD]).decode()
-    except (InvalidTag, binascii.Error, ValueError):
+    value = _open(_state.cipher, stored)
+    if value is None:
         raise SenderKeyError(
             "a stored transport id could not be decrypted (wrong DESK_SENDER_KEY?)"
-        ) from None
+        )
+    return value
 
 
 def is_encrypted(value: str | None) -> bool:
@@ -209,3 +227,44 @@ def encrypt_existing(session) -> dict[tuple[str, str], int]:
             ).rowcount
         changed[(table, col)] = n
     return changed
+
+
+def rotate_existing(session, old_key: bytes, new_key: bytes) -> tuple[int, int]:
+    """B06: re-encrypt every covered value from old_key to new_key. Caller commits (one
+    transaction) or rolls back. Returns (rows rotated, distinct values already under the
+    new key). Safe to re-run: each value is tried with the NEW key first and skipped if it
+    opens. A value neither key opens raises SenderKeyError (no key, no value in the text);
+    plaintext values left raise SenderStateError. Either way the caller rolls back."""
+    if old_key == new_key:
+        raise SenderKeyError("DESK_SENDER_KEY_NEW must differ from DESK_SENDER_KEY")
+    old, new = AESSIV(old_key), AESSIV(new_key)
+    plain = [f"{t}.{c}" for (t, c), (p, _) in storage_state(session).items() if p]
+    if plain:
+        raise SenderStateError(
+            "plaintext transport ids remain in "
+            + ", ".join(plain)
+            + "; run `python -m desk senders encrypt` first"
+        )
+    rotated = skipped = 0
+    for table, col in COVERED:
+        values = session.execute(
+            text(
+                f"SELECT DISTINCT {col} FROM {table} "  # noqa: S608
+                f"WHERE {col} LIKE 'enc1:%'"
+            )
+        ).scalars()
+        for stored in list(values):
+            if _open(new, stored) is not None:
+                skipped += 1
+                continue
+            value = _open(old, stored)
+            if value is None:
+                raise SenderKeyError(
+                    f"a stored transport id in {table}.{col} opens with neither "
+                    "DESK_SENDER_KEY nor DESK_SENDER_KEY_NEW; nothing was changed"
+                )
+            rotated += session.execute(
+                text(f"UPDATE {table} SET {col} = :new WHERE {col} = :old"),  # noqa: S608
+                {"new": _seal(new, value), "old": stored},
+            ).rowcount
+    return rotated, skipped
