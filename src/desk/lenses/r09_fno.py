@@ -3,11 +3,22 @@
 OI rising alone is not net bullish buying or dealer inventory. Yesterday's released
 report is not today's live positioning."""
 
-from desk.core.facts import DataClass
+from desk.core.facts import DataClass, Gap
 from desk.core.lens import LensId, LensResult
 from desk.feeds.base import DatasetKind
 from desk.lenses.context import LensContext, dec, missing, mk_fact, session_fact_class, stale_gap
 from desk.quant.options import OPTIONS_VERSION, basis, oi_change_pct
+
+NO_BAN_LIST = Gap(
+    topic="F&O ban list",
+    data_class=DataClass.UNAVAILABLE,
+    reason="ban list is not in the current feed's F&O data",
+)
+NO_CONTRACT_OI = Gap(
+    topic="contract open interest",
+    data_class=DataClass.UNAVAILABLE,
+    reason="current feed's F&O data has no contract-level OI, settle or basis",
+)
 
 
 def build(ctx: LensContext) -> LensResult:
@@ -16,7 +27,7 @@ def build(ctx: LensContext) -> LensResult:
         return LensResult(lens=LensId.R09, gaps=(missing(DatasetKind.FNO, ctx),))
     cls, why = session_fact_class(ctx, DatasetKind.FNO, ds)
     derived = DataClass.STALE if why else DataClass.DERIVED
-    spot = dec(ds.meta["spot_close"])
+    spot = ds.meta.get("spot_close")
     facts = []
     for r in ds.records:
         c = f"{r['contract']} (expiry {r['expiry']})"
@@ -35,8 +46,8 @@ def build(ctx: LensContext) -> LensResult:
                     note=why or f"method {OPTIONS_VERSION}",
                 )
             )
-        if r.get("underlying_is_index_spot"):
-            pts, pct = basis(dec(r["settle"]), spot)
+        if r.get("underlying_is_index_spot") and spot is not None:
+            pts, pct = basis(dec(r["settle"]), dec(spot))
             facts += [
                 mk_fact(
                     ds,
@@ -57,18 +68,24 @@ def build(ctx: LensContext) -> LensResult:
                     note=why or f"method {OPTIONS_VERSION}",
                 ),
             ]
-    ban = ds.meta.get("ban_list", [])
-    facts.append(
-        mk_fact(
-            ds,
-            "F&O ban list",
-            ", ".join(ban) if ban else "none listed",
-            "text",
-            "NSE F&O",
-            cls,
-            note=why,
+    gaps = []
+    if "ban_list" in ds.meta:
+        ban = ds.meta["ban_list"]
+        facts.append(
+            mk_fact(
+                ds,
+                "F&O ban list",
+                ", ".join(ban) if ban else "none listed",
+                "text",
+                "NSE F&O",
+                cls,
+                note=why,
+            )
         )
-    )
+    else:  # not in this feed's data: never shown as "none listed"
+        gaps.append(NO_BAN_LIST)
+    if not ds.records:
+        gaps.append(NO_CONTRACT_OI)
     for p in ds.meta.get("participant_oi", []):
         facts.append(
             mk_fact(
@@ -81,7 +98,7 @@ def build(ctx: LensContext) -> LensResult:
                 note=why,
             )
         )
-    gaps = [stale_gap(DatasetKind.FNO, why)] if why else []
+    gaps += [stale_gap(DatasetKind.FNO, why)] if why else []
     return LensResult(
         lens=LensId.R09,
         facts=tuple(facts),

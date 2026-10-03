@@ -333,7 +333,7 @@ def test_end_to_end_report_has_all_15_lenses_and_shows_gaps(mock_calendar, kind)
             assert not isinstance(f.value, float)
         if r.status is LensStatus.UNAVAILABLE:
             assert r.gaps
-    for lid in (LensId.R01, LensId.R02, LensId.R03, LensId.R04, LensId.R05, LensId.R08):
+    for lid in (LensId.R01, LensId.R02, LensId.R03, LensId.R08):
         assert lens(rep, lid).status is LensStatus.UNAVAILABLE
     assert lens(rep, LensId.R10).facts and lens(rep, LensId.R13).facts
     # no value from a dataset the feed has no rights to
@@ -349,3 +349,323 @@ def test_end_to_end_report_has_all_15_lenses_and_shows_gaps(mock_calendar, kind)
 def test_fixture_feed_reports_have_no_terms_gap(build_report):
     rep = build_report()
     assert not any(g.topic == TERMS_GAP_TOPIC for r in rep.lenses for g in r.gaps)
+
+
+# ---- step 2b: sectors (all indices), stocks (CM bhavcopy), participant OI ---------------
+
+NEW_2B = (DatasetKind.SECTORS, DatasetKind.STOCKS, DatasetKind.FNO)
+
+
+def edit_text(root: Path, kind: DatasetKind, change) -> None:
+    path = root / DAY.isoformat() / FILES[kind][0]
+    path.write_text(change(path.read_text()))
+
+
+def _all_decimal(obj) -> bool:
+    if isinstance(obj, dict):
+        return all(_all_decimal(v) for v in obj.values())
+    if isinstance(obj, list):
+        return all(_all_decimal(v) for v in obj)
+    return not isinstance(obj, float)
+
+
+def test_2b_samples_exist_and_are_in_readme():
+    readme = (SAMPLES / "README.md").read_text()
+    for kind in NEW_2B:
+        name = FILES[kind][0]
+        assert (SAMPLES / DAY.isoformat() / name).exists()
+        assert f"`{name}`" in readme and f"`{kind.value}`" in readme
+
+
+def test_all_indices_sample_parses():
+    ds = nse_feed().fetch(DatasetKind.SECTORS, DAY)
+    assert ds.as_of == datetime(2026, 9, 30, 10, 0, tzinfo=UTC)
+    assert ds.meta["index_return_pct"] == Decimal("0.48")
+    assert ds.meta["rows_ignored"] == 1  # NIFTY NEXT 50 is not a sector index
+    by = {r["sector"]: r for r in ds.records}
+    assert set(by) == {"AUTO", "BANK", "ENERGY", "IT"}
+    assert by["BANK"] == {
+        "sector": "BANK",
+        "return_pct": Decimal("0.82"),
+        "advances": Decimal("9"),
+        "declines": Decimal("3"),
+        "weight_pct": None,  # not in the file: never invented
+    }
+    assert _all_decimal(ds.records) and _all_decimal(ds.meta)
+
+
+def test_cm_bhavcopy_sample_reads_only_the_universe_eq_rows():
+    ds = nse_feed().fetch(DatasetKind.STOCKS, DAY)
+    assert ds.as_of == datetime(2026, 9, 30, 10, 0, tzinfo=UTC)
+    assert [r["symbol"] for r in ds.records] == ["SAMPLE_BANK", "SAMPLE_OIL"]
+    oil = ds.records[1]
+    # the EQ row, not the BE row of the same symbol
+    assert (oil["prev_open"], oil["prev_high"], oil["prev_low"], oil["prev_close"]) == (
+        Decimal("1428.00"),
+        Decimal("1431.00"),
+        Decimal("1405.00"),
+        Decimal("1420.00"),
+    )
+    assert ds.meta["catalysts_sourced"] is False and ds.meta["symbols_missing"] == []
+    assert all(r["catalysts"] == [] and r["weight_pct"] is None for r in ds.records)
+    assert _all_decimal(ds.records)
+
+
+def test_bhavcopy_universe_is_not_widened(tmp_samples):
+    edit_text(tmp_samples, DatasetKind.STOCKS, lambda t: t.replace("SAMPLE_OIL,EQ", "SAMPLE_X,EQ"))
+    ds = nse_feed(tmp_samples).fetch(DatasetKind.STOCKS, DAY)
+    assert [r["symbol"] for r in ds.records] == ["SAMPLE_BANK"]
+    assert ds.meta["symbols_missing"] == ["SAMPLE_OIL"]
+    with pytest.raises(ValueError, match="universe"):
+        NsePublicFeed(FileSource(SAMPLES), stock_universe=())
+
+
+def test_participant_oi_sample_parses():
+    ds = nse_feed().fetch(DatasetKind.FNO, DAY)
+    assert ds.as_of == datetime(2026, 9, 30, 10, 0, tzinfo=UTC)
+    assert ds.records == []  # no contract-level OI in this file
+    net = {p["participant"]: p["net_contracts"] for p in ds.meta["participant_oi"]}
+    assert net == {
+        "Client": Decimal("115000"),
+        "DII": Decimal("-25000"),
+        "FII": Decimal("-120000"),  # 80000 long - 200000 short
+        "Pro": Decimal("30000"),
+    }
+    assert sum(net.values()) == 0
+    assert "ban_list" not in ds.meta and "spot_close" not in ds.meta
+    assert _all_decimal(ds.meta)
+
+
+def test_2b_datasets_are_granted_sample_labelled_and_terms_unconfirmed(mock_calendar):
+    feed = nse_feed()
+    caps = feed.capabilities()
+    for kind in NEW_2B:
+        assert caps.get(kind).granted and "AI-use" in caps.get(kind).terms_unconfirmed
+        ds = feed.fetch(kind, DAY)
+        assert ds.source.name == SAMPLE_NAME and ds.source.is_mock
+    rep = report(mock_calendar, feed)
+    terms = next(g for g in lens(rep, LensId.R15).gaps if g.topic == TERMS_GAP_TOPIC)
+    for name in ("sectors", "stocks", "fno", "flows", "option_chain"):
+        assert name in terms.reason
+
+
+def test_sectors_map_to_facts_with_a_weights_gap(mock_calendar):
+    r04 = lens(report(mock_calendar, nse_feed()), LensId.R04)
+    by = {f.label: f for f in r04.facts}
+    bank = by["BANK return"]
+    assert (bank.value, bank.unit, bank.data_class) == (
+        Decimal("0.82"),
+        "%",
+        DataClass.PRIOR_SESSION,
+    )
+    assert bank.instrument == "NIFTY BANK (sector index)" and bank.source.name == SAMPLE_NAME
+    assert by["BANK vs Nifty 50"].value == Decimal("0.34")
+    assert by["BANK vs Nifty 50"].data_class is DataClass.DERIVED
+    assert by["IT breadth (adv/dec)"].value == "3/7"
+    assert not any("weight" in f.label for f in r04.facts)
+    assert any(g.topic == "sector weights" for g in r04.gaps)
+    assert r04.status is not LensStatus.UNAVAILABLE
+
+
+def test_stocks_map_to_levels_and_never_claim_zero_catalysts(mock_calendar):
+    rep = report(mock_calendar, nse_feed())
+    r05 = lens(rep, LensId.R05)
+    by = {f.label: f for f in r05.facts}
+    assert set(by) == {
+        f"{s} prior session {p}"
+        for s in ("SAMPLE_BANK", "SAMPLE_OIL")
+        for p in ("close", "high", "low")
+    }
+    close = by["SAMPLE_BANK prior session close"]
+    assert (close.value, close.unit, close.instrument, close.data_class) == (
+        Decimal("1650.00"),
+        "INR",
+        "SAMPLE_BANK",
+        DataClass.PRIOR_SESSION,
+    )
+    assert not any("catalyst" in f.label for f in r05.facts)  # no "0 catalysts" fact
+    assert any(g.topic == "catalysts" for g in r05.gaps)
+    # no shortlist, so no watch names handed to R14
+    assert not any(f.label.endswith("prior close") for f in r05.facts)
+
+
+def test_participant_oi_maps_to_r09_with_ban_list_and_contract_gaps(mock_calendar):
+    r09 = lens(report(mock_calendar, nse_feed()), LensId.R09)
+    by = {f.label: f for f in r09.facts}
+    fii = by["FII net index futures OI"]
+    assert (fii.value, fii.unit, fii.data_class) == (
+        Decimal("-120000"),
+        "contracts",
+        DataClass.PRIOR_SESSION,
+    )
+    assert fii.source.name == SAMPLE_NAME
+    assert "F&O ban list" not in by  # never "none listed" for a list the file lacks
+    topics = {g.topic for g in r09.gaps}
+    assert {"F&O ban list", "contract open interest"} <= topics
+    assert not any("basis" in f.label or "OI change" in f.label for f in r09.facts)
+
+
+def test_fixture_feed_still_shows_weights_ban_list_and_shortlist(build_report):
+    rep = build_report()
+    r04, r05, r09 = (lens(rep, lid) for lid in (LensId.R04, LensId.R05, LensId.R09))
+    assert any("weight in Nifty 50" in f.label for f in r04.facts)
+    assert not any(g.topic == "sector weights" for g in r04.gaps)
+    assert any(f.label.endswith("prior close") for f in r05.facts)
+    assert any(f.label == "F&O ban list" for f in r09.facts)
+    assert not any(g.topic in {"F&O ban list", "contract open interest"} for g in r09.gaps)
+
+
+@pytest.mark.parametrize(
+    ("kind", "lid"),
+    [
+        (DatasetKind.SECTORS, LensId.R04),
+        (DatasetKind.STOCKS, LensId.R05),
+        (DatasetKind.FNO, LensId.R09),
+    ],
+)
+def test_2b_missing_file_is_a_gap(mock_calendar, tmp_samples, kind, lid):
+    (tmp_samples / DAY.isoformat() / FILES[kind][0]).unlink()
+    rep = report(mock_calendar, nse_feed(tmp_samples))
+    assert lens(rep, lid).status is LensStatus.UNAVAILABLE and not lens(rep, lid).facts
+    assert "not saved for 2026-10-01" in _r_gap_reasons(rep, lid)
+
+
+def _pct(raw, value):
+    raw["data"][3]["percentChange"] = value  # NIFTY BANK
+
+
+@pytest.mark.parametrize(
+    ("change", "expect"),
+    [
+        (lambda raw: _pct(raw, "1.82"), "percentChange"),
+        (lambda raw: raw["data"].pop(0), "no NIFTY 50 row"),
+        (lambda raw: raw["data"][3].update(advances="-1"), "whole count"),
+        (lambda raw: raw["data"][3].update(last=None), "not a number"),
+        (lambda raw: [r.update(key="BROAD MARKET INDICES") for r in raw["data"]], "SECTORAL"),
+        (lambda raw: raw["data"][5].update(index="NIFTY BANK"), "repeats"),
+    ],
+)
+def test_malformed_all_indices_is_a_gap(mock_calendar, tmp_samples, change, expect):
+    edit(tmp_samples, DatasetKind.SECTORS, change)
+    rep = report(mock_calendar, nse_feed(tmp_samples))
+    assert not lens(rep, LensId.R04).facts
+    reasons = _r_gap_reasons(rep, LensId.R04)
+    assert "could not read" in reasons and expect in reasons
+
+
+BANK_ROW = "SAMPLE_BANK,EQ,,,,,SAMPLE_BANK SAMPLE LTD,1640.00,1662.00,1631.50,1650.00"
+
+
+@pytest.mark.parametrize(
+    ("change", "expect"),
+    [
+        (lambda t: t.replace("ClsPric", "Close"), "missing columns"),
+        (lambda t: t.replace(BANK_ROW, BANK_ROW.replace("1662.00", "1645.00")), "inconsistent"),
+        (lambda t: t.replace(BANK_ROW, BANK_ROW.replace("1650.00", "abc")), "not a number"),
+        (lambda t: t + t.splitlines()[1] + "\n", "repeats"),
+        (
+            lambda t: t.replace("SAMPLE_BANK,EQ", "SAMPLE_BANK,BE").replace("OIL,EQ", "OIL,BL"),
+            "no universe",
+        ),
+        (
+            lambda t: t.replace(
+                "2026-09-30,2026-09-30,CM,NSE,STK,90002", "2026-09-29,2026-09-29,CM,NSE,STK,90002"
+            ),
+            "disagree",
+        ),
+        (lambda t: t.splitlines()[0] + "\n", "no rows"),
+        (lambda t: t.replace(",F1,1,,,,,", ",F1,1,,,,,,extra"), "more cells"),
+    ],
+)
+def test_malformed_bhavcopy_is_a_gap(mock_calendar, tmp_samples, change, expect):
+    edit_text(tmp_samples, DatasetKind.STOCKS, change)
+    rep = report(mock_calendar, nse_feed(tmp_samples))
+    assert not lens(rep, LensId.R05).facts
+    reasons = _r_gap_reasons(rep, LensId.R05)
+    assert "could not read" in reasons and expect in reasons
+
+
+def _oi_cell(text: str, who: str, col: int, value: str) -> str:
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        cells = line.split(",")
+        if cells[0] == who:
+            cells[col] = value
+            lines[i] = ",".join(cells)
+    return "\n".join(lines) + "\n"
+
+
+@pytest.mark.parametrize(
+    ("change", "expect"),
+    [
+        # FII long +1 everywhere it is counted except TOTAL -> column sum breaks
+        (
+            lambda t: _oi_cell(_oi_cell(t, "FII", 1, "80001"), "FII", 13, "2950001"),
+            "add up to TOTAL",
+        ),
+        # FII and TOTAL "Total Long" +1: columns still add up, but FII's row total does not
+        (
+            lambda t: _oi_cell(_oi_cell(t, "FII", 13, "2950001"), "TOTAL", 13, "15851001"),
+            "FII Total Long does not add up",
+        ),
+        (
+            lambda t: "\n".join(x for x in t.splitlines() if not x.startswith("FII")) + "\n",
+            "incomplete",
+        ),
+        (lambda t: t.replace("as on Sep 30, 2026", "for the day"), "title line"),
+        (lambda t: _oi_cell(t, "Pro", 2, "x"), "not a number"),
+        (lambda t: t.replace("\nDII,", "\nMF,"), "unexpected"),
+        (lambda t: t.replace("Future Index Long", "Fut Idx Long"), "KeyError"),
+    ],
+)
+def test_malformed_participant_oi_is_a_gap(mock_calendar, tmp_samples, change, expect):
+    edit_text(tmp_samples, DatasetKind.FNO, change)
+    rep = report(mock_calendar, nse_feed(tmp_samples))
+    assert not lens(rep, LensId.R09).facts
+    reasons = _r_gap_reasons(rep, LensId.R09)
+    assert "could not read" in reasons and expect in reasons
+
+
+def test_unbalanced_market_wide_participant_oi_is_refused(tmp_samples):
+    # move 1000 index-future shorts from FII to nobody, keeping every row and TOTAL consistent
+    def unbalance(t):
+        t = _oi_cell(t, "FII", 2, "199000")
+        t = _oi_cell(t, "FII", 14, "3299000")
+        t = _oi_cell(t, "TOTAL", 2, "399000")
+        return _oi_cell(t, "TOTAL", 14, "15850000")
+
+    edit_text(tmp_samples, DatasetKind.FNO, unbalance)
+    feed = nse_feed(tmp_samples)
+    assert feed.fetch(DatasetKind.FNO, DAY) is None
+    assert "TOTAL Future Index Long != Future Index Short" in feed.problems()[DatasetKind.FNO]
+
+
+def test_stale_2b_datasets_are_marked_stale(mock_calendar, tmp_samples):
+    edit(tmp_samples, DatasetKind.SECTORS, lambda raw: raw.update(timestamp="29-Sep-2026 15:30:00"))
+    edit_text(tmp_samples, DatasetKind.STOCKS, lambda t: t.replace("2026-09-30", "2026-09-29"))
+    edit_text(tmp_samples, DatasetKind.FNO, lambda t: t.replace("Sep 30, 2026", "Sep 29, 2026"))
+    rep = report(mock_calendar, nse_feed(tmp_samples))
+    for lid in (LensId.R04, LensId.R05, LensId.R09):
+        r = lens(rep, lid)
+        assert r.facts
+        assert all(f.data_class in {DataClass.STALE} for f in r.facts), lid
+        assert any(
+            g.data_class is DataClass.STALE and "expected prior session 2026-09-30" in g.reason
+            for g in r.gaps
+        )
+
+
+def test_end_to_end_2b_lenses_populated_from_samples_and_mock(mock_calendar):
+    rep = report(mock_calendar, nse_feed())
+    assert rep.is_mock and rep.id.startswith("MOCK-")
+    for lid in (LensId.R04, LensId.R05, LensId.R09, LensId.R10, LensId.R13):
+        r = lens(rep, lid)
+        assert r.facts and r.status is not LensStatus.UNAVAILABLE, lid
+        for f in r.facts:
+            assert f.source.is_mock and f.source.name == SAMPLE_NAME
+            assert not isinstance(f.value, float)
+    text = render_text(rep)
+    for line in ("BANK return: 0.82 %", "SAMPLE_OIL prior session close: 1420.00 INR"):
+        assert line in text
+    assert "FII net index futures OI: -120000 contracts" in text
+    assert "none listed" not in text

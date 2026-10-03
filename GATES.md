@@ -23,6 +23,7 @@ The NSE public adapter will be built and tested against saved sample files but s
 **disabled** until the owner confirms usage/redistribution/AI-use terms for that data.
 
 - step 2 adapter built against hand-made shape samples, disabled (2026-10-03)
+- step 2b: sectors/stocks/participant OI added on shape samples, disabled (2026-10-03)
 
 ## G02 verification checklist (must be ticked before any real WhatsApp send)
 

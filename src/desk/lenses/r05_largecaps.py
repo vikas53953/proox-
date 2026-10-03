@@ -4,7 +4,7 @@ for names without a catalyst."""
 
 from datetime import datetime
 
-from desk.core.facts import DataClass, Source
+from desk.core.facts import DataClass, Gap, Source
 from desk.core.lens import LensId, LensResult
 from desk.feeds.base import DatasetKind
 from desk.lenses.context import LensContext, dec, missing, mk_fact, session_fact_class, stale_gap
@@ -26,6 +26,8 @@ def build(ctx: LensContext) -> LensResult:
             lens=LensId.R05, gaps=(missing(DatasetKind.STOCKS, ctx, "no stock focus list"),)
         )
     cls, why = session_fact_class(ctx, DatasetKind.STOCKS, ds)
+    if ds.meta.get("catalysts_sourced") is False:
+        return levels_only(ds, cls, why)
     # Only catalysts published by the cutoff count (no look-ahead).
     records = [
         r
@@ -90,3 +92,46 @@ def build(ctx: LensContext) -> LensResult:
             )
         )
     return LensResult(lens=LensId.R05, facts=tuple(facts), gaps=tuple(gaps), notes=tuple(notes))
+
+
+NO_CATALYSTS = Gap(
+    topic="catalysts",
+    data_class=DataClass.UNAVAILABLE,
+    reason="current feed has no catalyst source: no shortlist made and no catalyst count claimed",
+)
+
+
+def levels_only(ds, cls: DataClass, why: str) -> LensResult:
+    """A feed with prior-session prices but no catalyst source (e.g. an exchange
+    bhavcopy): show the scanned names' prior-session levels, never a "0 catalysts"
+    count. Labels avoid "prior close" so R14 does not treat these as watch names."""
+    facts = []
+    for r in sorted(ds.records, key=lambda r: r["symbol"]):
+        sym = r["symbol"]
+        for part in ("close", "high", "low"):
+            facts.append(
+                mk_fact(
+                    ds,
+                    f"{sym} prior session {part}",
+                    dec(r[f"prev_{part}"]),
+                    "INR",
+                    sym,
+                    cls,
+                    note=why,
+                )
+            )
+    gaps = [NO_CATALYSTS] + ([stale_gap(DatasetKind.STOCKS, why)] if why else [])
+    missing_syms = ds.meta.get("symbols_missing") or []
+    if missing_syms:
+        gaps.append(
+            Gap(
+                topic=DatasetKind.STOCKS.value,
+                data_class=DataClass.UNAVAILABLE,
+                reason=f"no prior-session row for {', '.join(missing_syms)}",
+            )
+        )
+    notes = (
+        f"Scanned {len(ds.records)} names for prior-session levels; no catalyst source, "
+        "so no shortlist.",
+    )
+    return LensResult(lens=LensId.R05, facts=tuple(facts), gaps=tuple(gaps), notes=notes)
