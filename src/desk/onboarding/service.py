@@ -38,6 +38,7 @@ from desk.report.model import Report
 from desk.transport.whatsapp.payload import InboundMessage
 
 NEUTRAL_WINDOW = timedelta(hours=24)
+ONBOARDING_STEP = timedelta(microseconds=1)  # created_at spacing of the bind replies
 YES_WORDS = {"YES", "Y", "HAAN", "HA", "HAN"}
 NO_WORDS = {"NO", "N", "NAHI", "NAHIN"}
 GREETINGS = {"HI", "HII", "HELLO", "HEY", "NAMASTE", "/START"}  # /start = Telegram deep link
@@ -362,6 +363,9 @@ def handle_message(
     else:
         tenant = _try_bind(session, msg, now, bool(getattr(wa, "require_prebind", False)))
         if tenant is not None:
+            # claim orders by (created_at, part_no) and these rows have no part_no: give
+            # them strictly increasing created_at (1 us apart) so welcome -> privacy
+            # notice -> opt-in is the send order, not a uuid tiebreak
             _queue(
                 session,
                 msg,
@@ -370,8 +374,8 @@ def handle_message(
                 msgs.WELCOME_PENDING.format(reason=tenant.pending_reason),
                 now,
             )
-            _privacy_notice(session, wa, msg, tenant, now)
-            _queue(session, msg, tenant, "opt_in", msgs.OPT_IN, now)
+            _privacy_notice(session, wa, msg, tenant, now + ONBOARDING_STEP)
+            _queue(session, msg, tenant, "opt_in", msgs.OPT_IN, now + 2 * ONBOARDING_STEP)
             handled = "bound"
         else:
             tenant = _find_tenant(session, msg)  # bound meanwhile by a parallel webhook?
