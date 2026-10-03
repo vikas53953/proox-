@@ -180,9 +180,38 @@ def storage_state(session) -> dict[tuple[str, str], tuple[int, int]]:
     return out
 
 
+def unreadable_columns(session, key: bytes | None = None) -> list[str]:
+    """Covered columns whose sampled "enc1:" values do NOT open with the configured key
+    (or `key`). Samples the lowest and highest stored value per column (cheap, index-
+    friendly) so a rotation without the env swap is caught. Raw SQL; never returns or
+    prints a key or a value. Empty when encryption is off and no key is given."""
+    if key is not None:
+        cipher = AESSIV(key)
+    elif _state.cipher is not None:
+        cipher = _state.cipher
+    else:
+        return []
+    bad = []
+    for table, col in COVERED:
+        samples = session.execute(
+            text(
+                f"(SELECT {col} FROM {table} WHERE {col} LIKE 'enc1:%' "  # noqa: S608
+                f"ORDER BY {col} LIMIT 1) UNION "
+                f"(SELECT {col} FROM {table} WHERE {col} LIKE 'enc1:%' "
+                f"ORDER BY {col} DESC LIMIT 1)"
+            )
+        ).scalars()
+        if any(_open(cipher, v) is None for v in samples):
+            bad.append(f"{table}.{col}")
+    return bad
+
+
 def check_startup(session) -> None:
     """Refuse to run when stored rows disagree with the flag: ON with plaintext rows left
-    (lookups would miss them) or OFF with encrypted rows (they could not be read)."""
+    (lookups would miss them) or OFF with encrypted rows (they could not be read), or ON
+    with stored ids that do not open with DESK_SENDER_KEY (e.g. `senders rotate` ran but
+    the env var still holds the OLD key: every read would fail and new rows would be
+    written under the old key)."""
     want_plain = not _state.enabled
     bad = []
     for table, col in COVERED:
@@ -191,6 +220,14 @@ def check_startup(session) -> None:
             text(f"SELECT EXISTS (SELECT 1 FROM {table} WHERE {cond})")  # noqa: S608
         ).scalar():
             bad.append(f"{table}.{col}")
+    if not bad and not want_plain:
+        unreadable = unreadable_columns(session)
+        if unreadable:
+            raise SenderStateError(
+                "stored transport ids do not open with DESK_SENDER_KEY in "
+                + ", ".join(unreadable)
+                + "; after `senders rotate` set DESK_SENDER_KEY to the new key"
+            )
     if not bad:
         return
     if want_plain:
@@ -234,9 +271,16 @@ def rotate_existing(session, old_key: bytes, new_key: bytes) -> tuple[int, int]:
     transaction) or rolls back. Returns (rows rotated, distinct values already under the
     new key). Safe to re-run: each value is tried with the NEW key first and skipped if it
     opens. A value neither key opens raises SenderKeyError (no key, no value in the text);
-    plaintext values left raise SenderStateError. Either way the caller rolls back."""
+    plaintext values left raise SenderStateError. Either way the caller rolls back.
+
+    Stop `serve` before rotating. As a guard, every covered table is locked IN EXCLUSIVE
+    MODE first (reads still work): a writer that is still running waits for the commit
+    instead of adding rows under the old key mid-rotation; it must then be restarted
+    with the new key (startup refuses the old one)."""
     if old_key == new_key:
         raise SenderKeyError("DESK_SENDER_KEY_NEW must differ from DESK_SENDER_KEY")
+    tables = ", ".join(dict.fromkeys(t for t, _ in COVERED))
+    session.execute(text(f"LOCK TABLE {tables} IN EXCLUSIVE MODE"))
     old, new = AESSIV(old_key), AESSIV(new_key)
     plain = [f"{t}.{c}" for (t, c), (p, _) in storage_state(session).items() if p]
     if plain:

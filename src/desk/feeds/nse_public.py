@@ -174,7 +174,15 @@ def parse_option_chain(raw: Any) -> tuple[datetime, list[dict], dict]:
     expiries = sorted(_ist(e, "%d-%b-%Y").date() for e in rec["expiryDates"])
     if not expiries:
         raise NseDataError("option chain: no expiry dates")
-    near = expiries[0]
+    # an expiry is live until SESSION_CLOSE_IST on its day; NSE can still list it after
+    live = [
+        e
+        for e in expiries
+        if e > as_of.date() or (e == as_of.date() and as_of.time() < SESSION_CLOSE_IST)
+    ]
+    if not live:
+        raise NseDataError("option chain: every listed expiry has passed")
+    near = live[0]
     near_text = near.strftime("%d-%b-%Y")
     records, skipped, underlying = [], 0, ""
     for row in rec["data"]:
@@ -495,7 +503,7 @@ class NsePublicFeed:
             if data is None:
                 raise NseDataError(f"{file_name} not saved for {trading_date.isoformat()}")
             if file_name.endswith(".csv"):
-                text = data.decode("utf-8")
+                text = data.decode("utf-8-sig")  # Excel/Notepad saves add a BOM
                 if kind is DatasetKind.STOCKS:
                     as_of, records, meta = parse_cm_bhavcopy(text, self._universe)
                 else:

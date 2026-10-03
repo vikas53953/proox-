@@ -189,14 +189,53 @@ def test_existing_tenant_not_on_list_gets_no_proactive_send(db, mock_calendar):
     assert parts and all(p.state == "CANCELLED" for p in parts)
     assert all("TELEGRAM_ALLOWED_CHAT_IDS" in p.error for p in parts)
     assert len(fake.calls) == n  # nothing sent to OTHER after the list was set
-    # and their inbound is not handled: no routing, just the neutral reply
+    # STOP is still honoured (review fix): opted out, silently, nothing else routed
+    rows_before = len(all_rows(db, Outbox))
     fake.user_says(OTHER, "STOP")
     poll_once(db, client2, LOCKED, ist(8, 5))
     (t,) = all_rows(db, Tenant)
-    assert t.opt_in_state == "yes"  # STOP not routed while blocked
+    assert t.opt_in_state == "stopped"  # re-adding the chat later sends nothing
+    assert len(all_rows(db, Outbox)) == rows_before  # no STOP ack, no neutral reply
     with db() as s:
         inbound = s.execute(select(Inbound).where(Inbound.handled_as.like("not_allowed%")))
         assert inbound.scalar_one().tenant_id is None
+
+
+@pytest.mark.parametrize("cmd", ["STOP", "/stop", " stop "])
+def test_blocked_tenant_stop_forms_are_honoured(db, cmd):
+    fake, client, _ = setup(OPEN)
+    _opted_in(db, fake, client, OTHER)
+    rows_before = len(all_rows(db, Outbox))
+    _, client2, _ = setup(LOCKED, fake)
+    fake.user_says(OTHER, cmd)
+    poll_once(db, client2, LOCKED, ist(8, 5))
+    (t,) = all_rows(db, Tenant)
+    assert t.opt_in_state == "stopped"
+    assert len(all_rows(db, Outbox)) == rows_before
+    assert {i.handled_as for i in all_rows(db, Inbound)} >= {"not_allowed"}
+
+
+def test_blocked_tenant_start_is_not_honoured(db):
+    fake, client, _ = setup(OPEN)
+    _opted_in(db, fake, client, OTHER)
+    _, client2, _ = setup(LOCKED, fake)
+    fake.user_says(OTHER, "STOP")
+    poll_once(db, client2, LOCKED, ist(8, 5))
+    for i, cmd in enumerate(["START", "/start", "YES"]):
+        fake.user_says(OTHER, cmd)
+        poll_once(db, client2, LOCKED, ist(9, i))
+    (t,) = all_rows(db, Tenant)
+    assert t.opt_in_state == "stopped"  # still opted out
+    kinds = [r.kind for r in all_rows(db, Outbox)]
+    assert "start" not in kinds and kinds.count("neutral") == 1  # neutral, 24h limit
+
+
+def test_non_tenant_stop_gets_only_the_neutral_reply(db):
+    fake, client, _ = setup(LOCKED)
+    fake.user_says(OTHER, "STOP")
+    poll_once(db, client, LOCKED, ist(8, 5))
+    assert all_rows(db, Tenant) == []
+    assert [r.kind for r in all_rows(db, Outbox)] == ["neutral"]
 
 
 def test_allowed_tenant_still_gets_report(db, mock_calendar):

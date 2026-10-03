@@ -167,7 +167,7 @@ def _csv_columns(kind: DatasetKind, text: str) -> list[str]:
 
 def _fields(kind: DatasetKind, data: bytes) -> tuple[set[str], Any]:
     """Present fields + the parsed value for the adapter's parser (raises on decode)."""
-    text = data.decode("utf-8")
+    text = data.decode("utf-8-sig")  # same as the adapter: a leading BOM is dropped
     if kind in (DatasetKind.STOCKS, DatasetKind.FNO):
         return set(_csv_columns(kind, text)), text
     raw = json.loads(text, parse_float=Decimal)

@@ -141,19 +141,22 @@ def _factory(check: bool = True):
 
 
 def _senders(args: argparse.Namespace) -> None:
-    """status: plaintext / encrypted row counts per covered column (mixed = flagged).
+    """status: plaintext / encrypted row counts per covered column (mixed = flagged;
+    stored ids that do not open with DESK_SENDER_KEY = flagged).
     encrypt: rewrite every plaintext transport id, all tables in ONE transaction;
     idempotent; refused unless DESK_ENCRYPT_SENDERS=1 with a valid DESK_SENDER_KEY.
     rotate (B06): re-encrypt every value from DESK_SENDER_KEY to DESK_SENDER_KEY_NEW in
-    ONE transaction; safe to re-run; the operator then swaps the env vars."""
+    ONE transaction; safe to re-run; the operator then swaps the env vars. Stop serve
+    first (rotate also locks the covered tables so a running writer waits)."""
     from sqlalchemy.exc import IntegrityError
 
-    from desk.pii import enabled, encrypt_existing, storage_state
+    from desk.pii import enabled, encrypt_existing, storage_state, unreadable_columns
 
     settings, factory = _factory(check=False)
+    status_key = None  # None = the configured DESK_SENDER_KEY
     with factory() as s:
         if args.action == "rotate":
-            _rotate(s, settings)
+            status_key = _rotate(s, settings)
         if args.action == "encrypt":
             if not enabled():
                 raise SystemExit("refusing: set DESK_ENCRYPT_SENDERS=1 and DESK_SENDER_KEY")
@@ -168,18 +171,28 @@ def _senders(args: argparse.Namespace) -> None:
                 ) from None
             print(f"encrypted {sum(changed.values())} values; nothing else changed")
         state = storage_state(s)
+        unreadable = unreadable_columns(s, status_key) if enabled() else []
     plain = sum(p for p, _ in state.values())
     enc = sum(e for _, e in state.values())
     for (table, col), (p, e) in state.items():
         print(f"{table}.{col}: plain={p} encrypted={e}")
     flag = "ON" if enabled() else "OFF"
     mixed = (enabled() and plain) or (not enabled() and enc)
-    print(f"flag {flag}; " + ("MISMATCH: rows do not match the flag" if mixed else "consistent"))
     if mixed:
+        verdict = "MISMATCH: rows do not match the flag"
+    elif unreadable:
+        which = "DESK_SENDER_KEY_NEW" if status_key is not None else "DESK_SENDER_KEY"
+        verdict = f"MISMATCH: stored transport ids do not open with {which} in " + ", ".join(
+            unreadable
+        )
+    else:
+        verdict = "consistent"
+    print(f"flag {flag}; {verdict}")
+    if mixed or unreadable:
         raise SystemExit(1)
 
 
-def _rotate(session, settings) -> None:
+def _rotate(session, settings) -> bytes:
     import os
 
     from sqlalchemy.exc import IntegrityError
@@ -205,6 +218,7 @@ def _rotate(session, settings) -> None:
         ) from None
     print(f"rotated {rotated} values; {skipped} already under the new key")
     print("now set DESK_SENDER_KEY to the new key and clear DESK_SENDER_KEY_NEW")
+    return new
 
 
 def _invite(args: argparse.Namespace) -> None:
