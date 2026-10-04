@@ -57,19 +57,21 @@ class TelegramSettings:
     bot_token: str = field(default="", repr=False)
     bot_username: str = ""
     live: bool = False  # DESK_TELEGRAM_LIVE=1: real api.telegram.org (owner PC only)
-    # B07: TELEGRAM_ALLOWED_CHAT_IDS. None = unset = no restriction (today's behaviour).
-    # Set: only these chat ids may bind an invite, be handled or receive tenant messages.
+    # B07: TELEGRAM_ALLOWED_CHAT_IDS. Only these chat ids may bind an invite, be handled
+    # or receive tenant messages. None = no restriction. Deployment default (owner,
+    # 2026-10-04): load_settings locks it, i.e. unset = empty set = no Telegram chat;
+    # "*" opens it. The field default stays None for code that builds settings directly.
     allowed_chat_ids: frozenset[str] | None = None
     # TELEGRAM_PRIVACY_NOTICE=1: send the (DRAFT) privacy disclosure once, right after a
     # Telegram welcome (GATES.md T1). Off by default.
     privacy_notice: bool = False
     # TELEGRAM_REQUIRE_PREBIND=1 (GATES.md T1 pre-binding rule): `invite` refuses Telegram
-    # invites without --chat-id and onboarding refuses unbound Telegram invites. Off by
-    # default (a pre-bound invite works either way).
+    # invites without --chat-id and onboarding refuses unbound Telegram invites.
+    # load_settings default: ON (owner, 2026-10-04); TELEGRAM_REQUIRE_PREBIND=0 turns it off.
     require_prebind: bool = False
     # TELEGRAM_TRACK_MEMBER_UPDATES=1: also poll `my_chat_member`, so a person blocking the
     # bot is noticed at once (opt-in stopped, pending proactive rows cancelled) instead of
-    # on the next send's 403. Off by default: getUpdates request unchanged.
+    # on the next send's 403. load_settings default: ON (owner, 2026-10-04); =0 turns it off.
     track_member_updates: bool = False
 
     @property
@@ -81,7 +83,7 @@ class TelegramSettings:
         return getattr(msg, "channel", "") == "telegram" and msg.phone_number_id == self.bot_id
 
     def allows(self, chat_id: str) -> bool:
-        """B07 allowlist check; always True while TELEGRAM_ALLOWED_CHAT_IDS is unset."""
+        """B07 allowlist check; always True when the allowlist is open (None)."""
         return self.allowed_chat_ids is None or str(chat_id) in self.allowed_chat_ids
 
 
@@ -142,36 +144,38 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
             live=env.get("DESK_TELEGRAM_LIVE", "") == "1",
             allowed_chat_ids=parse_chat_ids(env.get("TELEGRAM_ALLOWED_CHAT_IDS", "")),
             privacy_notice=_flag(env, "TELEGRAM_PRIVACY_NOTICE"),
-            require_prebind=_flag(env, "TELEGRAM_REQUIRE_PREBIND"),
-            track_member_updates=_flag(env, "TELEGRAM_TRACK_MEMBER_UPDATES"),
+            require_prebind=_flag(env, "TELEGRAM_REQUIRE_PREBIND", default=True),
+            track_member_updates=_flag(env, "TELEGRAM_TRACK_MEMBER_UPDATES", default=True),
         ),
         senders=_sender_crypto(env),
     )
 
 
-def _flag(env: dict[str, str], name: str) -> bool:
-    """Empty or "0" = off (default), "1" = on; anything else refuses to start."""
+def _flag(env: dict[str, str], name: str, default: bool = False) -> bool:
+    """Unset/empty = `default`, "0" = off, "1" = on; anything else refuses to start."""
     raw = env.get(name, "").strip()
     if raw not in ("", "0", "1"):
         raise SettingsError(f"{name} must be 0 or 1")
-    return raw == "1"
+    return default if raw == "" else raw == "1"
 
 
 _CHAT_ID = re.compile(r"-?[0-9]{1,19}")
 
 
 def parse_chat_ids(raw: str) -> frozenset[str] | None:
-    """B07: "111, 222" -> {"111", "222"}; empty/unset -> None (no restriction).
-    Anything else (non-integers, or only commas) refuses to start: a typo must never
-    silently turn the allowlist off."""
+    """B07: "111, 222" -> {"111", "222"}; empty/unset -> empty set (locked: no Telegram
+    chat, owner default 2026-10-04); "*" -> None (open, no restriction). Anything else
+    (non-integers, or only commas) refuses to start: a typo must never silently open it."""
     if not raw.strip():
+        return frozenset()
+    if raw.strip() == "*":
         return None
     ids = [part.strip() for part in raw.split(",")]
     bad = [i for i in ids if i and not _CHAT_ID.fullmatch(i)]
     if bad or not any(ids):
         raise SettingsError(
             "TELEGRAM_ALLOWED_CHAT_IDS must be comma-separated integer chat ids "
-            "(e.g. 123456789,987654321) or empty"
+            "(e.g. 123456789,987654321), empty (no chat) or * (any chat)"
         )
     return frozenset(str(int(i)) for i in ids if i)
 

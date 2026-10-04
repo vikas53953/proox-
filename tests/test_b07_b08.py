@@ -63,10 +63,13 @@ def all_rows(db, model):
 # ---- B07: config ---------------------------------------------------------------------------
 
 
-def test_allowlist_unset_or_empty_means_no_restriction():
+def test_allowlist_unset_or_empty_is_locked_star_is_open():
+    # owner 2026-10-04: locked by default (was: unset = no restriction)
     for env in ({}, {"TELEGRAM_ALLOWED_CHAT_IDS": ""}, {"TELEGRAM_ALLOWED_CHAT_IDS": "  "}):
         tg = load_settings(env).telegram
-        assert tg.allowed_chat_ids is None and tg.allows("123")
+        assert tg.allowed_chat_ids == frozenset() and not tg.allows("123")
+    tg = load_settings({"TELEGRAM_ALLOWED_CHAT_IDS": " * "}).telegram
+    assert tg.allowed_chat_ids is None and tg.allows("123")
 
 
 def test_allowlist_parses_integers():
@@ -96,7 +99,9 @@ def test_make_telegram_transport_carries_the_allowlist():
     s = load_settings({"TELEGRAM_ALLOWED_CHAT_IDS": "42"})
     transport, _ = make_telegram_transport(s)
     assert transport.allowed_recipients == frozenset({"42"})
-    assert make_telegram_transport(load_settings({}))[0].allowed_recipients is None
+    assert make_telegram_transport(load_settings({}))[0].allowed_recipients == frozenset()
+    open_ = load_settings({"TELEGRAM_ALLOWED_CHAT_IDS": "*"})
+    assert make_telegram_transport(open_)[0].allowed_recipients is None
 
 
 def test_send_policy_cancels_tenant_rows_to_chats_not_on_the_list():
