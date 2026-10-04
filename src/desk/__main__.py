@@ -234,6 +234,8 @@ def _invite(args: argparse.Namespace) -> None:
                 "refusing: TELEGRAM_REQUIRE_PREBIND=1 needs --chat-id <the person's chat id>"
             )
         bound = None if args.chat_id is None else str(args.chat_id)
+        if bound is not None and not tg.allows(bound):
+            print("note: this chat id is not on TELEGRAM_ALLOWED_CHAT_IDS; the invite cannot bind")
         business_id, with_code = tg.bot_id, True
     else:
         if args.chat_id is not None:
@@ -290,6 +292,8 @@ def _serve(args: argparse.Namespace) -> None:
         raise SystemExit(f"refusing to start: {exc}") from None
     if settings.whatsapp.phone_number_id not in ("", MOCK_PHONE_NUMBER_ID):
         print("note: WHATSAPP_PHONE_NUMBER_ID is set; its rows stay queued (G02: fake only)")
+    if settings.telegram.allowed_chat_ids == frozenset():
+        print("note: TELEGRAM_ALLOWED_CHAT_IDS is empty; no Telegram chat can bind or be served")
     if settings.telegram.live:
         try:
             me = tg_client.get_me()

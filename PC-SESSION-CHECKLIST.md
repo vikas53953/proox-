@@ -75,10 +75,11 @@ To change the key (rotation, B06):
 - [ ] The number in the list is your chat id. If the list is empty, `serve` already read
       your message: send a new one while `serve` is stopped, then run the command again.
 - [ ] Set `TELEGRAM_ALLOWED_CHAT_IDS=<your chat id>` (more ids: separate with commas).
-      Other chats then get only the neutral "invite not valid" reply.
+      **Required:** unset means no chat at all (locked by default since 2026-10-04; `serve`
+      prints a note). Other chats get only the neutral "invite not valid" reply.
 - [ ] A wrong value (letters, only commas) makes `serve` refuse to start. Fix the value.
-- [ ] Optional (T1 pre-binding): invite a person with `python -m desk invite --channel telegram --chat-id <their chat id>`; set `TELEGRAM_REQUIRE_PREBIND=1` to refuse invites without `--chat-id` (default 0; any value other than 0/1 refuses to start).
-- [ ] Optional (T1 early block detection): `TELEGRAM_TRACK_MEMBER_UPDATES=1` stops daily updates as soon as a person blocks the bot (default 0 = noticed on the next send; any value other than 0/1 refuses to start).
+- [ ] Invites need the person's chat id (T1 pre-binding, on by default since 2026-10-04): `python -m desk invite --channel telegram --chat-id <their chat id>`, and add that id to `TELEGRAM_ALLOWED_CHAT_IDS` (the command prints a note if it is missing). `TELEGRAM_REQUIRE_PREBIND=0` allows invites without `--chat-id`; any value other than 0/1 refuses to start.
+- [ ] Early block detection is on by default: a person blocking the bot stops their daily updates at once. `TELEGRAM_TRACK_MEMBER_UPDATES=0` turns it off (noticed on the next send instead); any value other than 0/1 refuses to start.
 
 ## 5. First live Telegram send
 

@@ -82,10 +82,11 @@ def redeem(db, tg, chat_id, code):
 # ---- settings ---------------------------------------------------------------------------
 
 
-def test_require_prebind_defaults_off_and_parses():
-    for env in ({}, {"TELEGRAM_REQUIRE_PREBIND": ""}, {"TELEGRAM_REQUIRE_PREBIND": "0"}):
-        assert load_settings(env).telegram.require_prebind is False
-    assert load_settings({"TELEGRAM_REQUIRE_PREBIND": "1"}).telegram.require_prebind is True
+def test_require_prebind_defaults_on_and_parses():
+    # owner 2026-10-04: on by default (was off)
+    for env in ({}, {"TELEGRAM_REQUIRE_PREBIND": ""}, {"TELEGRAM_REQUIRE_PREBIND": "1"}):
+        assert load_settings(env).telegram.require_prebind is True
+    assert load_settings({"TELEGRAM_REQUIRE_PREBIND": "0"}).telegram.require_prebind is False
 
 
 @pytest.mark.parametrize("raw", ["yes", "true", "2", "on"])
@@ -233,7 +234,8 @@ def test_cli_chat_id_prebinds(db, pg_url, monkeypatch, capsys):
 
 
 def test_cli_without_chat_id_unchanged(db, pg_url, monkeypatch, capsys):
-    code, out = run_invite(monkeypatch, capsys, pg_url, {}, "--channel", "telegram")
+    env = {"TELEGRAM_REQUIRE_PREBIND": "0"}  # owner 2026-10-04: default is now on
+    code, out = run_invite(monkeypatch, capsys, pg_url, env, "--channel", "telegram")
     assert code == 0 and "pre-bound" not in out
     (row,) = invites(db)
     assert row.bound_sender is None

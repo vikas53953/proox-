@@ -110,11 +110,12 @@ def row(db, row_id):
 # ---- settings ---------------------------------------------------------------------------
 
 
-def test_setting_defaults_off_and_parses():
-    for env in ({}, {"TELEGRAM_TRACK_MEMBER_UPDATES": ""}, {"TELEGRAM_TRACK_MEMBER_UPDATES": "0"}):
-        assert load_settings(env).telegram.track_member_updates is False
-    on = load_settings({"TELEGRAM_TRACK_MEMBER_UPDATES": "1"}).telegram
-    assert on.track_member_updates is True
+def test_setting_defaults_on_and_parses():
+    # owner 2026-10-04: on by default (was off)
+    for env in ({}, {"TELEGRAM_TRACK_MEMBER_UPDATES": ""}, {"TELEGRAM_TRACK_MEMBER_UPDATES": "1"}):
+        assert load_settings(env).telegram.track_member_updates is True
+    off = load_settings({"TELEGRAM_TRACK_MEMBER_UPDATES": "0"}).telegram
+    assert off.track_member_updates is False
 
 
 @pytest.mark.parametrize("raw", ["yes", "true", "2", "on"])
